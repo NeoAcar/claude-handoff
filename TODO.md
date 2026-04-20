@@ -37,3 +37,38 @@
         - Log warning, skip the line, continue processing
         - Report count of skipped lines in export summary
       Add a fixture with a corrupted/concatenated line for regression testing.
+
+## Bugs from real-world use (day 2)
+
+- [ ] **SILENT BUG — slug computation is incomplete.** `computeSlug` in
+      src/core/paths.ts only replaces `/` and space with `-`. But Claude
+      Code's real rule is broader: any non-alphanumeric non-dash character
+      becomes `-`. Confirmed empirically by creating `/tmp/test.slug (v1)/project`
+      and observing Claude Code produced slug `-tmp-test-slug--v1--project`.
+
+      Real example that caused a false "no sessions" report:
+        Path: /home/neo/PythonProjects/YZV405E_2526_Hedgehogs
+        Claude Code slug: -home-neo-PythonProjects-YZV405E-2526-Hedgehogs (underscores → dashes)
+        Our computed slug: -home-neo-PythonProjects-YZV405E_2526_Hedgehogs (underscores kept)
+        Result: claude-handoff status reported "(none)" while real sessions existed.
+
+      **Preferred fix: switch to reverse-matching instead of computing slugs.**
+      List directories under ~/.claude/projects/, find the one that corresponds
+      to the current cwd. This is robust to future changes in Claude Code's
+      slug rule and to characters we haven't tested (Unicode, Turkish chars).
+
+      Keep `computeSlug` as a fallback/informational utility, but don't rely
+      on it for lookups. Update all callers in src/commands/*.ts.
+
+      Regression test: add fixture with a project path containing underscores,
+      dots, parentheses, and a Turkish character. Verify reverse-match finds it.
+
+## What we learned from day-2 real-world testing
+
+  - Tool worked fine on `intern-apply-bot` (574 records, title extracted)
+  - Tool crashed on `FinanceAi` (corrupted line — day-1 bug)
+  - Tool silently failed on `YZV405E_2526_Hedgehogs` (slug bug — day-2 bug)
+  - Speculative Phase 2 features (HANDOFF.md generator, interactive picker,
+    --last N filter, memory support, .claude-handoff-ignore, thinking
+    signature investigation) were NOT observed as actual pain points during
+    real use. Park them until more real usage generates real signal.
