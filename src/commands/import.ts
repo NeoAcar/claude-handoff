@@ -87,14 +87,18 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     }
 
     // Transform: portable placeholders → local paths
-    const count = await transformSession(sessionFile, outputPath, (record) => {
+    const { count, stats } = await transformSession(sessionFile, outputPath, (record) => {
       return deepRewrite(record, (s) =>
         portableToLocal(s, projectRoot, localHome),
       ) as SessionRecord;
     });
 
     const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-    console.log(`  Imported: ${outputFilename} — ${title} (${count} records)`);
+    let suffix = '';
+    if (stats.recoveredLines > 0 || stats.skippedLines > 0) {
+      suffix = ` [recovered ${stats.recoveredLines}, skipped ${stats.skippedLines}]`;
+    }
+    console.log(`  Imported: ${outputFilename} — ${title} (${count} records)${suffix}`);
     importedCount++;
   }
 

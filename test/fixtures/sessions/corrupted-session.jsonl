@@ -1,0 +1,5 @@
+{"type":"user","sessionId":"corrupt-1","cwd":"/tmp","timestamp":"2026-04-19T10:00:00Z"}
+this is not valid json at all !!!
+{"type":"assistant","sessionId":"corrupt-1","cwd":"/tmp","timestamp":"2026-04-19T10:00:01Z"}
+{"type":"user","sessionId":"corrupt-1","n":1}{"type":"assistant","sessionId":"corrupt-1","n":2}
+{"type":"last-prompt","sessionId":"corrupt-1","lastPrompt":"done"}

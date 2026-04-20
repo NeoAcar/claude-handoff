@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { join } from 'node:path';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import {
   streamRecords,
@@ -14,6 +14,7 @@ import type { SessionRecord } from '../../src/core/session.js';
 
 const fixtureDir = join(import.meta.dirname, '..', 'fixtures', 'sessions');
 const sampleSession = join(fixtureDir, 'sample-session.jsonl');
+const corruptedSession = join(fixtureDir, 'corrupted-session.jsonl');
 
 describe('streamRecords', () => {
   it('streams all records from fixture', async () => {
@@ -131,7 +132,7 @@ describe('transformSession', () => {
 
   it('transforms all records through a function', async () => {
     const outPath = join(tmpDir, 'transformed.jsonl');
-    const count = await transformSession(sampleSession, outPath, (record) => ({
+    const { count } = await transformSession(sampleSession, outPath, (record) => ({
       ...record,
       _transformed: true,
     }));
@@ -153,6 +154,58 @@ describe('transformSession', () => {
     for (let i = 0; i < original.length; i++) {
       expect(transformed[i].type).toBe(original[i].type);
     }
+  });
+});
+
+describe('parse recovery (corrupted session)', () => {
+  // Silence the Warning: ... console output in tests
+  const origWarn = console.warn;
+  beforeAll(() => {
+    console.warn = () => {};
+  });
+
+  it('does not throw on malformed lines', async () => {
+    const records: SessionRecord[] = [];
+    await expect(streamRecords(corruptedSession, (r) => records.push(r))).resolves.toBeDefined();
+  });
+
+  it('returns stats: 1 recovered line (concatenated), 1 skipped (pure junk)', async () => {
+    const stats = await streamRecords(corruptedSession, () => {});
+    expect(stats.malformedLines).toBe(2);
+    expect(stats.recoveredLines).toBe(1);
+    expect(stats.skippedLines).toBe(1);
+  });
+
+  it('recovers concatenated records as 2 distinct records', async () => {
+    const records: SessionRecord[] = [];
+    await streamRecords(corruptedSession, (r) => records.push(r));
+    // 3 valid lines (user, assistant, last-prompt) + 2 recovered = 5 records; junk line skipped
+    expect(records.length).toBe(5);
+    // Find the concatenated pair
+    const ns = records.filter((r) => typeof r.n === 'number').map((r) => r.n);
+    expect(ns).toEqual([1, 2]);
+  });
+
+  it('extractSessionMeta surfaces stats', async () => {
+    const meta = await extractSessionMeta(corruptedSession);
+    expect(meta.stats.malformedLines).toBe(2);
+    expect(meta.stats.recoveredLines).toBe(1);
+    expect(meta.stats.skippedLines).toBe(1);
+    expect(meta.sessionId).toBe('corrupt-1');
+  });
+
+  it('transformSession returns stats alongside count', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'recovery-'));
+    const outPath = join(dir, 'out.jsonl');
+    const { count, stats } = await transformSession(corruptedSession, outPath, (r) => r);
+    expect(count).toBe(5);
+    expect(stats.malformedLines).toBe(2);
+    expect(stats.recoveredLines).toBe(1);
+    expect(stats.skippedLines).toBe(1);
+  });
+
+  afterAll(() => {
+    console.warn = origWarn;
   });
 });
 

@@ -35,6 +35,9 @@ interface ExportResult {
   exported: ManifestEntry[];
   totalRedactionHits: number;
   allHits: RedactionHit[];
+  totalMalformed: number;
+  totalRecovered: number;
+  totalSkipped: number;
 }
 
 export async function exportCommand(projectRoot: string, options: ExportOptions): Promise<void> {
@@ -100,7 +103,14 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     manifest = createEmptyManifest('0.1.0');
   }
 
-  const result: ExportResult = { exported: [], totalRedactionHits: 0, allHits: [] };
+  const result: ExportResult = {
+    exported: [],
+    totalRedactionHits: 0,
+    allHits: [],
+    totalMalformed: 0,
+    totalRecovered: 0,
+    totalSkipped: 0,
+  };
 
   for (const sessionFile of sessionFiles) {
     const meta = await extractSessionMeta(sessionFile);
@@ -122,7 +132,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     // Transform: path rewrite + optional redaction
     let sessionHits: RedactionHit[] = [];
 
-    const count = await transformSession(sessionFile, outputPath, (record) => {
+    const { count, stats } = await transformSession(sessionFile, outputPath, (record) => {
       // Path rewrite
       let rewritten = deepRewrite(record, (s) =>
         localToPortable(s, projectRoot, localHome),
@@ -152,9 +162,16 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     result.exported.push(entry);
     result.totalRedactionHits += sessionHits.length;
     result.allHits.push(...sessionHits);
+    result.totalMalformed += stats.malformedLines;
+    result.totalRecovered += stats.recoveredLines;
+    result.totalSkipped += stats.skippedLines;
 
     const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-    console.log(`  Exported: ${exportFilename} — ${title} (${count} records)`);
+    let suffix = '';
+    if (stats.recoveredLines > 0 || stats.skippedLines > 0) {
+      suffix = ` [recovered ${stats.recoveredLines}, skipped ${stats.skippedLines}]`;
+    }
+    console.log(`  Exported: ${exportFilename} — ${title} (${count} records)${suffix}`);
   }
 
   // Write manifest
@@ -184,6 +201,12 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   if (result.totalRedactionHits > 0) {
     console.log(`Redacted: ${result.totalRedactionHits} potential secret(s)`);
     console.log(`Review: .claude-handoff/redaction-log.json`);
+  }
+  if (result.totalMalformed > 0) {
+    console.log(
+      `Malformed lines: ${result.totalMalformed} ` +
+        `(recovered ${result.totalRecovered}, skipped ${result.totalSkipped})`,
+    );
   }
   console.log('Before committing, run: git diff .claude-shared/');
 }

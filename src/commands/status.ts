@@ -22,7 +22,11 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     for (const f of localFiles) {
       const meta = await extractSessionMeta(f);
       const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-      console.log(`  ${meta.sessionId} — ${title} (${meta.recordCount} records)`);
+      let suffix = '';
+      if (meta.stats.malformedLines > 0) {
+        suffix = ` [malformed ${meta.stats.malformedLines}: recovered ${meta.stats.recoveredLines}, skipped ${meta.stats.skippedLines}]`;
+      }
+      console.log(`  ${meta.sessionId} — ${title} (${meta.recordCount} records)${suffix}`);
     }
   }
 
