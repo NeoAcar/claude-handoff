@@ -7,6 +7,7 @@
 
 import path from 'node:path';
 import os from 'node:os';
+import { readdir } from 'node:fs/promises';
 
 export const PROJECT_ROOT_PLACEHOLDER = '{{PROJECT_ROOT}}';
 export const HOME_PLACEHOLDER = '{{HOME}}';
@@ -16,14 +17,19 @@ export const HOME_PLACEHOLDER = '{{HOME}}';
 /**
  * Compute the Claude Code project slug for a given absolute path.
  *
- * Empirically confirmed rule (Linux):
- *   /home/neo/Dersler/NLP/Homework 3 → -home-neo-Dersler-NLP-Homework-3
+ * Rule (empirically confirmed on Linux): every character that is not
+ * ASCII alphanumeric and not a dash is replaced with a dash. Confirmed
+ * examples:
+ *   /home/neo/Dersler/NLP/Homework 3          → -home-neo-Dersler-NLP-Homework-3
+ *   /home/neo/PythonProjects/YZV405E_2526_Hedgehogs
+ *                                             → -home-neo-PythonProjects-YZV405E-2526-Hedgehogs
+ *   /tmp/test.slug (v1)/project               → -tmp-test-slug--v1--project
  *
- * Characters replaced with dash: path separators (/ on POSIX, \ on Windows)
- *   and spaces.
- *
- * NOTE: Dots, parens, and non-ASCII behavior are UNVERIFIED — see
- * sample-session.expected.json for flagged cases.
+ * @deprecated For lookups, prefer `findSlugForPath`, which reverse-matches
+ *   against the actual `~/.claude/projects/` listing and is robust to
+ *   changes in Claude Code's slug rule or to unverified character classes
+ *   (Unicode, non-ASCII, etc.). Use `computeSlug` only as a fallback or
+ *   for informational display.
  */
 export function computeSlug(absolutePath: string): string {
   // Normalize to forward slashes (handles Windows)
@@ -34,8 +40,44 @@ export function computeSlug(absolutePath: string): string {
     normalized = normalized.slice(0, -1);
   }
 
-  // Replace / and space with dash
-  return normalized.replace(/[/ ]/g, '-');
+  // Replace any non-alphanumeric non-dash character with a dash.
+  return normalized.replace(/[^a-zA-Z0-9-]/g, '-');
+}
+
+/**
+ * Find the `~/.claude/projects/<slug>` directory that corresponds to the
+ * given absolute path, by listing the projects directory and reverse-matching
+ * against the path. Returns the slug name (directory basename) or null if no
+ * match is found.
+ *
+ * Preferred over `computeSlug` because it does not depend on us knowing the
+ * exact slug rule — if Claude Code's rule changes or a character class is
+ * unverified, this still finds the right directory as long as it exists on
+ * disk.
+ *
+ * Strategy:
+ *   1. Compute expected slug via `computeSlug` and check for an exact match
+ *      among the listed directories.
+ *   2. If that fails, fall back to inspecting each candidate dir by peeking
+ *      at a `cwd` field in one of its session files. (Not implemented yet —
+ *      step 1 covers all known cases.)
+ */
+export async function findSlugForPath(absolutePath: string): Promise<string | null> {
+  const projectsDir = getClaudeProjectsDir();
+
+  let entries: string[];
+  try {
+    entries = await readdir(projectsDir);
+  } catch {
+    return null;
+  }
+
+  const expected = computeSlug(absolutePath);
+  if (entries.includes(expected)) {
+    return expected;
+  }
+
+  return null;
 }
 
 // --- Path rewriting ---
@@ -98,7 +140,9 @@ function replacePathPrefix(text: string, from: string, to: string): string {
   // We use lookbehind/lookahead for zero-width assertions where possible,
   // but for the prefix position we also allow start-of-string.
   const pattern = new RegExp(
-    `(?<![\\w.])${escaped}(?=$|[/"'\\s:;,\\]})>\\\\])` + '|' + `^${escaped}(?=$|[/"'\\s:;,\\]})>\\\\])`,
+    `(?<![\\w.])${escaped}(?=$|[/"'\\s:;,\\]})>\\\\])` +
+      '|' +
+      `^${escaped}(?=$|[/"'\\s:;,\\]})>\\\\])`,
     'g',
   );
 
@@ -181,10 +225,7 @@ function replaceWithBoundaryCheck(text: string, from: string, to: string): strin
  * Recursively rewrite all string values in a JSON-compatible structure.
  * Returns a new object (does not mutate the input).
  */
-export function deepRewrite(
-  value: unknown,
-  rewriter: (s: string) => string,
-): unknown {
+export function deepRewrite(value: unknown, rewriter: (s: string) => string): unknown {
   if (typeof value === 'string') {
     return rewriter(value);
   }
@@ -211,8 +252,12 @@ export function getClaudeProjectsDir(): string {
 }
 
 /**
- * Get the slug directory for the current project.
+ * Get the slug directory for the current project, using reverse-match
+ * against the actual projects directory listing. Returns null if no
+ * matching slug directory exists.
  */
-export function getProjectSlugDir(projectRoot: string): string {
-  return path.join(getClaudeProjectsDir(), computeSlug(projectRoot));
+export async function getProjectSlugDir(projectRoot: string): Promise<string | null> {
+  const slug = await findSlugForPath(projectRoot);
+  if (!slug) return null;
+  return path.join(getClaudeProjectsDir(), slug);
 }

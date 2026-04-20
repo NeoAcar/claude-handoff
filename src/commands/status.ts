@@ -3,12 +3,12 @@
  */
 
 import path from 'node:path';
-import { computeSlug, getClaudeProjectsDir } from '../core/paths.js';
+import { findSlugForPath, computeSlug, getClaudeProjectsDir } from '../core/paths.js';
 import { listSessionFiles, extractSessionMeta } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 
 export async function statusCommand(projectRoot: string): Promise<void> {
-  const slug = computeSlug(projectRoot);
+  const slug = (await findSlugForPath(projectRoot)) ?? computeSlug(projectRoot);
   const slugDir = path.join(getClaudeProjectsDir(), slug);
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');

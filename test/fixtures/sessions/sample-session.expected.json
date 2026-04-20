@@ -76,13 +76,19 @@
       },
       {
         "input": "/home/user/my.project",
-        "expected": "-home-user-my.project",
-        "_unverified": "No empirical data for dots in path — this is a hypothesis"
+        "expected": "-home-user-my-project"
       },
       {
         "input": "/home/user/project (copy)",
-        "expected": "-home-user-project-(copy)",
-        "_unverified": "No empirical data for parens in path — parens assumed to pass through unchanged (consistent with only / and space being replaced)"
+        "expected": "-home-user-project--copy-"
+      },
+      {
+        "input": "/home/neo/PythonProjects/YZV405E_2526_Hedgehogs",
+        "expected": "-home-neo-PythonProjects-YZV405E-2526-Hedgehogs"
+      },
+      {
+        "input": "/tmp/test.slug (v1)/project",
+        "expected": "-tmp-test-slug--v1--project"
       }
     ]
   }

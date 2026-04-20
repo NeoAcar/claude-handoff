@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   computeSlug,
+  findSlugForPath,
   localToPortable,
   portableToLocal,
   deepRewrite,
@@ -8,7 +9,9 @@ import {
   HOME_PLACEHOLDER,
 } from '../../src/core/paths.js';
 import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Load fixture expected values
 const expectedPath = join(
@@ -57,9 +60,8 @@ describe('computeSlug', () => {
     });
   }
 
-  // Edge cases — unverified, document expectations
-  it('preserves dots in path components', () => {
-    expect(computeSlug('/home/user/my.project')).toBe('-home-user-my.project');
+  it('replaces dots with dashes', () => {
+    expect(computeSlug('/home/user/my.project')).toBe('-home-user-my-project');
   });
 
   it('handles multiple consecutive spaces', () => {
@@ -67,20 +69,81 @@ describe('computeSlug', () => {
   });
 
   it('handles Windows-style path with backslashes', () => {
-    expect(computeSlug('C:\\Users\\bob\\projectx')).toBe('C:-Users-bob-projectx');
+    // Backslashes normalize to /, and : (non-alnum) becomes dash.
+    expect(computeSlug('C:\\Users\\bob\\projectx')).toBe('C--Users-bob-projectx');
   });
 
-  it('handles path with underscores', () => {
-    expect(computeSlug('/home/user/my_project')).toBe('-home-user-my_project');
+  it('replaces underscores with dashes (day-2 bug regression)', () => {
+    expect(computeSlug('/home/user/my_project')).toBe('-home-user-my-project');
   });
 
   it('handles path with hyphens', () => {
     expect(computeSlug('/home/user/my-project')).toBe('-home-user-my-project');
   });
 
-  it('handles non-ASCII characters', () => {
-    // Unverified: we assume non-ASCII passes through unchanged
-    expect(computeSlug('/home/user/проект')).toBe('-home-user-проект');
+  it('replaces each non-ASCII character with a dash', () => {
+    // Turkish characters (ü, ç, ı, ş) — each non-alphanumeric, non-dash
+    // character becomes a dash. Underscore also becomes dash.
+    expect(computeSlug('/home/user/Türkçe/proje_ışık')).toBe('-home-user-T-rk-e-proje----k');
+  });
+
+  it('replaces parentheses with dashes (day-2 empirical confirmation)', () => {
+    // Claude Code empirically produced this for /tmp/test.slug (v1)/project
+    expect(computeSlug('/tmp/test.slug (v1)/project')).toBe('-tmp-test-slug--v1--project');
+  });
+
+  it('replaces colons with dashes', () => {
+    expect(computeSlug('/home/user/file:name')).toBe('-home-user-file-name');
+  });
+});
+
+// --- Reverse-match slug lookup ---
+
+describe('findSlugForPath', () => {
+  let tmpHome: string;
+  let originalHome: string | undefined;
+
+  beforeAll(async () => {
+    tmpHome = await mkdtemp(join(tmpdir(), 'claude-handoff-findslug-'));
+    await mkdir(join(tmpHome, '.claude', 'projects'), { recursive: true });
+    // Seed realistic slug directories
+    const seeded = [
+      '-home-neo-PythonProjects-YZV405E-2526-Hedgehogs', // underscore path
+      '-home-neo-PythonProjects-FinanceAi',
+      '-home-user-my-project', // came from /home/user/my_project OR /home/user/my.project etc.
+      '-tmp-test-slug--v1--project',
+    ];
+    for (const s of seeded) {
+      await mkdir(join(tmpHome, '.claude', 'projects', s), { recursive: true });
+    }
+    originalHome = process.env.HOME;
+    process.env.HOME = tmpHome;
+  });
+
+  afterAll(async () => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(tmpHome, { recursive: true, force: true });
+  });
+
+  it('finds slug for path with underscores (day-2 bug regression)', async () => {
+    const result = await findSlugForPath('/home/neo/PythonProjects/YZV405E_2526_Hedgehogs');
+    expect(result).toBe('-home-neo-PythonProjects-YZV405E-2526-Hedgehogs');
+  });
+
+  it('finds slug for straightforward path', async () => {
+    const result = await findSlugForPath('/home/neo/PythonProjects/FinanceAi');
+    expect(result).toBe('-home-neo-PythonProjects-FinanceAi');
+  });
+
+  it('finds slug for path with parens and dots', async () => {
+    const result = await findSlugForPath('/tmp/test.slug (v1)/project');
+    expect(result).toBe('-tmp-test-slug--v1--project');
+  });
+
+  it('returns null when no matching slug exists', async () => {
+    const result = await findSlugForPath('/nonexistent/project/path');
+    expect(result).toBeNull();
   });
 });
 
@@ -124,9 +187,7 @@ describe('localToPortable', () => {
 
   it('rewrites path in bash command', () => {
     const cmd = `wc -l "${root}/HW3.ipynb"`;
-    expect(localToPortable(cmd, root, home)).toBe(
-      `wc -l "${PROJECT_ROOT_PLACEHOLDER}/HW3.ipynb"`,
-    );
+    expect(localToPortable(cmd, root, home)).toBe(`wc -l "${PROJECT_ROOT_PLACEHOLDER}/HW3.ipynb"`);
   });
 
   it('rewrites path in cd command', () => {

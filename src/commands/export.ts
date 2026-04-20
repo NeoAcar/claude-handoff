@@ -9,16 +9,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {
-  computeSlug,
+  findSlugForPath,
   getClaudeProjectsDir,
   localToPortable,
   deepRewrite,
 } from '../core/paths.js';
-import {
-  listSessionFiles,
-  extractSessionMeta,
-  transformSession,
-} from '../core/session.js';
+import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 import { deepRedact } from '../core/redactor.js';
 import type { RedactionHit } from '../core/redactor.js';
@@ -41,10 +37,7 @@ interface ExportResult {
   allHits: RedactionHit[];
 }
 
-export async function exportCommand(
-  projectRoot: string,
-  options: ExportOptions,
-): Promise<void> {
+export async function exportCommand(projectRoot: string, options: ExportOptions): Promise<void> {
   // Safety check for --no-redact
   if (options.noRedact && !options.iKnowWhatImDoing) {
     throw new Error(
@@ -54,8 +47,10 @@ export async function exportCommand(
   }
 
   const localHome = os.homedir();
-  const slug = computeSlug(projectRoot);
-  const slugDir = path.join(getClaudeProjectsDir(), slug);
+  const slug = await findSlugForPath(projectRoot);
+  const slugDir = slug
+    ? path.join(getClaudeProjectsDir(), slug)
+    : path.join(getClaudeProjectsDir(), '<not-found>');
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
   const localDir = path.join(projectRoot, '.claude-handoff');
@@ -118,9 +113,7 @@ export async function exportCommand(
     const outputPath = path.join(sessionsDir, exportFilename);
 
     // Check if already exported
-    const alreadyExported = manifest.sessions.some(
-      (s) => s.sessionId === meta.sessionId,
-    );
+    const alreadyExported = manifest.sessions.some((s) => s.sessionId === meta.sessionId);
     if (alreadyExported) {
       console.log(`  Skipping ${meta.sessionId} (already exported)`);
       continue;

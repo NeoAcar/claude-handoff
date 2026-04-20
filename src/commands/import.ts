@@ -10,15 +10,12 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   computeSlug,
+  findSlugForPath,
   getClaudeProjectsDir,
   portableToLocal,
   deepRewrite,
 } from '../core/paths.js';
-import {
-  listSessionFiles,
-  extractSessionMeta,
-  transformSession,
-} from '../core/session.js';
+import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 
 export interface ImportOptions {
@@ -28,12 +25,12 @@ export interface ImportOptions {
   overwrite: boolean;
 }
 
-export async function importCommand(
-  projectRoot: string,
-  options: ImportOptions,
-): Promise<void> {
+export async function importCommand(projectRoot: string, options: ImportOptions): Promise<void> {
   const localHome = os.homedir();
-  const slug = computeSlug(projectRoot);
+  // Prefer reverse-match; fall back to computed slug when the directory
+  // doesn't exist yet (Bob's first import on this machine).
+  const existing = await findSlugForPath(projectRoot);
+  const slug = existing ?? computeSlug(projectRoot);
   const slugDir = path.join(getClaudeProjectsDir(), slug);
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
@@ -78,9 +75,13 @@ export async function importCommand(
     const outputPath = path.join(slugDir, outputFilename);
 
     // Check if already exists locally
-    const exists = await access(outputPath).then(() => true).catch(() => false);
+    const exists = await access(outputPath)
+      .then(() => true)
+      .catch(() => false);
     if (exists && !options.overwrite) {
-      console.log(`  Skipping ${meta.sessionId} (already exists locally, use --overwrite to replace)`);
+      console.log(
+        `  Skipping ${meta.sessionId} (already exists locally, use --overwrite to replace)`,
+      );
       skippedCount++;
       continue;
     }
