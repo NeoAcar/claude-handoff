@@ -23,3 +23,17 @@
 - **git hooks (opt-in)** — `claude-handoff install-hooks` for post-commit auto-export, post-merge auto-import.
 - **`claude-handoff doctor`** — Cross-machine path diagnosis command.
 - **Windows support** — Verify slug computation and path rewriting on Windows (drive letters, backslashes).
+
+## Bugs from real-world use (day 1)
+
+- [ ] Parser crashes on malformed JSONL in real sessions. Example:
+      FinanceAi session 8bac1cb9, line 350 appears to be two JSON
+      records concatenated without a newline separator (length 2051,
+      jq fails at column 135 with "invalid numeric literal").
+      Root cause likely in Claude Code itself, not our tool.
+      Fix required in src/core/session.ts — streamRecords should:
+        - Catch parse errors per line
+        - Attempt recovery (e.g., split on `}{` boundaries as a fallback)
+        - Log warning, skip the line, continue processing
+        - Report count of skipped lines in export summary
+      Add a fixture with a corrupted/concatenated line for regression testing.
