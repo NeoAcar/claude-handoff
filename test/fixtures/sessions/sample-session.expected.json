@@ -1,0 +1,89 @@
+{
+  "_comment": "Expected path rewriter outputs for sample-session.jsonl. Used as ground truth in paths.test.ts.",
+  "fixture": "test/fixtures/sessions/sample-session.jsonl",
+  "export": {
+    "_comment": "Result of exporting with localRoot=/fake/user/fake-project, localHome=/fake/user",
+    "localRoot": "/fake/user/fake-project",
+    "localHome": "/fake/user",
+    "sample_records": {
+      "line_4_tool_use_read": {
+        "description": "Read tool_use: file_path should use {{PROJECT_ROOT}}",
+        "input_file_path": "{{PROJECT_ROOT}}/HW3.ipynb"
+      },
+      "line_6_tool_use_bash": {
+        "description": "Bash tool_use: command should use {{PROJECT_ROOT}}",
+        "input_command": "wc -l \"{{PROJECT_ROOT}}/HW3.ipynb\""
+      },
+      "line_7_tool_result_bash": {
+        "description": "Bash tool_result: stdout should use {{PROJECT_ROOT}}",
+        "toolUseResult_stdout": "1891 {{PROJECT_ROOT}}/HW3.ipynb"
+      },
+      "line_2_user_cwd": {
+        "description": "User message cwd should use {{PROJECT_ROOT}}",
+        "cwd": "{{PROJECT_ROOT}}"
+      },
+      "line_13_bash_cd": {
+        "description": "Bash command with cd should use {{PROJECT_ROOT}}",
+        "input_command_prefix": "cd \"{{PROJECT_ROOT}}\" && conda run -n base python3 -c \"\nfrom"
+      }
+    }
+  },
+  "import": {
+    "_comment": "Result of importing with localRoot=/home/bob/work/cool-project, localHome=/home/bob",
+    "localRoot": "/home/bob/work/cool-project",
+    "localHome": "/home/bob",
+    "sample_records": {
+      "line_4_tool_use_read": {
+        "description": "Read tool_use: file_path should use Bob's root",
+        "input_file_path": "/home/bob/work/cool-project/HW3.ipynb"
+      },
+      "line_6_tool_use_bash": {
+        "description": "Bash tool_use: command should use Bob's root",
+        "input_command": "wc -l \"/home/bob/work/cool-project/HW3.ipynb\""
+      },
+      "line_7_tool_result_bash": {
+        "description": "Bash tool_result: stdout should use Bob's root",
+        "toolUseResult_stdout": "1891 /home/bob/work/cool-project/HW3.ipynb"
+      },
+      "line_2_user_cwd": {
+        "description": "User message cwd should use Bob's root",
+        "cwd": "/home/bob/work/cool-project"
+      },
+      "line_13_bash_cd": {
+        "description": "Bash command with cd should use Bob's root",
+        "input_command_prefix": "cd \"/home/bob/work/cool-project\" && conda run -n base python3 -c \"\nfro"
+      }
+    }
+  },
+  "slug_computation": {
+    "_comment": "Expected slug outputs for various paths",
+    "cases": [
+      {
+        "input": "/home/bob/work/cool-project",
+        "expected": "-home-bob-work-cool-project"
+      },
+      {
+        "input": "/Users/alice/projectx",
+        "expected": "-Users-alice-projectx"
+      },
+      {
+        "input": "/home/neo/Dersler/NLP/Homework 3",
+        "expected": "-home-neo-Dersler-NLP-Homework-3"
+      },
+      {
+        "input": "/tmp/test",
+        "expected": "-tmp-test"
+      },
+      {
+        "input": "/home/user/my.project",
+        "expected": "-home-user-my.project",
+        "_unverified": "No empirical data for dots in path — this is a hypothesis"
+      },
+      {
+        "input": "/home/user/project (copy)",
+        "expected": "-home-user-project-(copy)",
+        "_unverified": "No empirical data for parens in path — parens assumed to pass through unchanged (consistent with only / and space being replaced)"
+      }
+    ]
+  }
+}
