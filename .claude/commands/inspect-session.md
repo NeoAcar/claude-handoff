@@ -9,6 +9,7 @@ You will inspect a Claude Code session `.jsonl` file at the path the user provid
 ## Steps
 
 1. **Locate the file.** If the user passed a path, use it. Otherwise find the most recent `.jsonl` under `~/.claude/projects/`:
+
    ```bash
    find ~/.claude/projects -name "*.jsonl" -type f -printf '%T@ %p\n' | sort -rn | head -1 | awk '{print $2}'
    ```
@@ -20,17 +21,21 @@ You will inspect a Claude Code session `.jsonl` file at the path the user provid
 4. **Identify path-bearing fields.** For each distinct top-level structure, pick one sample line and use `jq` to extract where strings starting with `/` or `~` appear. Report the JSON paths (e.g., `.message.content[].input.file_path`) where absolute paths live. **Do not print the paths themselves** — just the locations.
 
 5. **Scan for secret patterns** without printing matches. Run grep with `-c` (count only) for each pattern:
+
    ```bash
    grep -cE 'sk-ant-|ghp_|AKIA[0-9A-Z]{16}|-----BEGIN' <file>
    ```
+
    Report counts per pattern. If any are nonzero, flag this file as sensitive.
 
 6. **Report field frequency** for the top-level `type` or equivalent discriminator field, if it exists:
+
    ```bash
    jq -r '.type // "unknown"' <file> | sort | uniq -c | sort -rn
    ```
 
 7. **Produce a structured summary:**
+
    ```
    File: <path>
    Size: <human-readable>, Lines: <count>

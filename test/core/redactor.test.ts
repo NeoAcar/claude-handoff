@@ -45,7 +45,9 @@ describe('redactText — default patterns', () => {
   });
 
   it('redacts Bearer token', () => {
-    const { text } = redactText('Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def');
+    const { text } = redactText(
+      'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def',
+    );
     expect(text).toContain('[REDACTED:bearer]');
   });
 
@@ -151,7 +153,8 @@ describe('deepRedact', () => {
             type: 'tool_use',
             name: 'Bash',
             input: {
-              command: 'curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature" https://api.example.com',
+              command:
+                'curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature" https://api.example.com',
             },
           },
         ],

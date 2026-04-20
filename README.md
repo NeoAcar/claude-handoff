@@ -36,13 +36,13 @@ node dist/cli.js <command>
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `claude-handoff init` | Create `.claude-shared/`, update `.gitignore` |
-| `claude-handoff export` | Export local sessions to `.claude-shared/` |
+| Command                 | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `claude-handoff init`   | Create `.claude-shared/`, update `.gitignore`   |
+| `claude-handoff export` | Export local sessions to `.claude-shared/`      |
 | `claude-handoff import` | Import shared sessions to `~/.claude/projects/` |
-| `claude-handoff status` | Show local vs shared sessions |
-| `claude-handoff list` | List sessions in `.claude-shared/` |
+| `claude-handoff status` | Show local vs shared sessions                   |
+| `claude-handoff list`   | List sessions in `.claude-shared/`              |
 
 ### Export options
 
@@ -92,6 +92,7 @@ npm run lint:fix      # Auto-fix formatting
 ## Related
 
 This tool addresses the session portability gap discussed in:
+
 - [anthropics/claude-code#12646](https://github.com/anthropics/claude-code/issues/12646) — Session sharing between machines
 - [anthropics/claude-code#25947](https://github.com/anthropics/claude-code/issues/25947) — Team collaboration with Claude Code context
 

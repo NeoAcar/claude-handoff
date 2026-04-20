@@ -77,6 +77,7 @@ This is consistent across all 7 project slugs on this machine.
 ```
 
 **Key observations:**
+
 - Session files are `<uuid>.jsonl` — the UUID is the session ID
 - Each session may have a companion directory `<uuid>/subagents/` for sub-agent transcripts
 - `memory/` directory contains project-level auto-memory (MEMORY.md + individual memory files)
@@ -89,20 +90,21 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 
 ### Message types observed
 
-| Type | Count (large session) | Purpose |
-|------|----------------------|---------|
-| `progress` | 348 | Streaming progress updates (tool execution) |
-| `assistant` | 110 | Claude's responses |
-| `user` | 85 | User messages |
-| `file-history-snapshot` | 82 | File state tracking for undo |
-| `custom-title` | 7 | Session title (for /resume picker) |
-| `agent-name` | 7 | Sub-agent naming |
-| `system` | 5 | System messages |
-| `last-prompt` | 1 | Last user prompt (for /resume display) |
+| Type                    | Count (large session) | Purpose                                     |
+| ----------------------- | --------------------- | ------------------------------------------- |
+| `progress`              | 348                   | Streaming progress updates (tool execution) |
+| `assistant`             | 110                   | Claude's responses                          |
+| `user`                  | 85                    | User messages                               |
+| `file-history-snapshot` | 82                    | File state tracking for undo                |
+| `custom-title`          | 7                     | Session title (for /resume picker)          |
+| `agent-name`            | 7                     | Sub-agent naming                            |
+| `system`                | 5                     | System messages                             |
+| `last-prompt`           | 1                     | Last user prompt (for /resume display)      |
 
 ### Record schemas (by type)
 
 #### `user` message
+
 ```json
 {
   "parentUuid": null,
@@ -126,6 +128,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```
 
 #### `assistant` message
+
 ```json
 {
   "parentUuid": "0d38e833-...",
@@ -151,6 +154,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```
 
 #### `custom-title`
+
 ```json
 {
   "type": "custom-title",
@@ -160,6 +164,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```
 
 #### `last-prompt`
+
 ```json
 {
   "type": "last-prompt",
@@ -169,6 +174,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```
 
 #### `file-history-snapshot`
+
 ```json
 {
   "type": "file-history-snapshot",
@@ -183,6 +189,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```
 
 #### `queue-operation` (only seen in small session)
+
 ```json
 {
   "type": "queue-operation",
@@ -201,6 +208,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 5. **`thinking` blocks** — Claude's reasoning may reference paths
 
 ### Fields that do NOT contain paths
+
 - `uuid`, `parentUuid`, `promptId`, `requestId` — pure IDs
 - `timestamp` — ISO dates
 - `type`, `userType`, `entrypoint`, `permissionMode` — enums
@@ -227,9 +235,18 @@ Searched the entire `~/.claude/` tree — no file by this name anywhere. The SPE
 ### `~/.claude/sessions/` (ephemeral process registry)
 
 Contains per-PID JSON files for currently running sessions:
+
 ```json
-{"pid":5020,"sessionId":"b396030e-...","cwd":"/home/neo/PythonProjects/claude-handoff","startedAt":1776696935461,"kind":"interactive","entrypoint":"cli"}
+{
+  "pid": 5020,
+  "sessionId": "b396030e-...",
+  "cwd": "/home/neo/PythonProjects/claude-handoff",
+  "startedAt": 1776696935461,
+  "kind": "interactive",
+  "entrypoint": "cli"
+}
 ```
+
 These are cleaned up when sessions end. Not relevant for export/import.
 
 ---
@@ -239,6 +256,7 @@ These are cleaned up when sessions end. Not relevant for export/import.
 **Found at:** `~/.claude/projects/<slug>/memory/`
 
 Structure:
+
 ```
 memory/
 ├── MEMORY.md              (index file with links to individual memories)
@@ -248,12 +266,14 @@ memory/
 ```
 
 Memory files use YAML frontmatter:
+
 ```markdown
 ---
 name: ...
 description: ...
 type: user|feedback|project|reference
 ---
+
 Content here
 ```
 
@@ -295,6 +315,7 @@ Content here
 ### What this means for the tool
 
 The core import mechanism is simple:
+
 1. Compute target slug from CWD
 2. Place rewritten `.jsonl` files in `~/.claude/projects/<slug>/`
 3. Rewrite `cwd`, `sessionId`, and all path-bearing fields
@@ -307,6 +328,7 @@ The core import mechanism is simple:
 ### Subagent transcripts
 
 Sessions that used the Agent tool have a companion directory:
+
 ```
 <session-uuid>/subagents/agent-<hash>.jsonl
 ```
@@ -316,7 +338,7 @@ These are separate JSONL files for sub-agent conversations. They likely contain 
 ### File sizes
 
 - Small session (11 lines): 12 KB
-- Medium session (645 lines, with agents): 2.0 MB  
+- Medium session (645 lines, with agents): 2.0 MB
 - Another medium session: 1.2 MB
 
 For a typical project with 5-10 sessions, expect 5-20 MB in `.claude-shared/`. Worth noting in README; git-lfs may be recommended for large projects.
@@ -342,6 +364,7 @@ These are streaming progress updates (tool execution output). They're ~54% of re
 ## Go / No-Go Decision
 
 **GO.** The core mechanism is sound:
+
 - Sessions live in a predictable filesystem location
 - They're self-contained JSONL files
 - Discovery is by filesystem scan, not by an opaque index

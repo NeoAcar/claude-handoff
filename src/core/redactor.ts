@@ -78,10 +78,7 @@ export interface RedactionResult {
 /**
  * Scan text for secrets and return redacted text plus a list of hits.
  */
-export function redactText(
-  text: string,
-  customPatterns: RedactionPattern[] = [],
-): RedactionResult {
+export function redactText(text: string, customPatterns: RedactionPattern[] = []): RedactionResult {
   const hits: RedactionHit[] = [];
   let result = text;
 

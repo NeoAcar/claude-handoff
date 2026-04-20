@@ -21,7 +21,9 @@ export async function initCommand(projectRoot: string): Promise<void> {
 
   // Write README.md in .claude-shared/
   const readmePath = path.join(sharedDir, 'README.md');
-  const readmeExists = await access(readmePath).then(() => true).catch(() => false);
+  const readmeExists = await access(readmePath)
+    .then(() => true)
+    .catch(() => false);
   if (!readmeExists) {
     await writeFile(
       readmePath,

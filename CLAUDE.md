@@ -71,6 +71,7 @@ macOS/Linux use a dash-separated slug; Windows likely differs. Do not ship Windo
 ## Phase 0 Discipline
 
 Before writing any tool code, produce `DISCOVERY.md` documenting:
+
 1. Actual `~/.claude/projects/` structure on this machine
 2. Slug format (macOS/Linux/Windows)
 3. A real JSONL line schema (redact any secrets in the example)
@@ -86,6 +87,7 @@ Alice runs `claude-handoff export`, commits, pushes. Bob pulls, runs `claude-han
 ## Commit Messages
 
 Format: `<area>: <imperative summary>`
+
 - `paths: rewrite HOME references on export`
 - `redactor: add detection for Anthropic API keys`
 - `cli: prompt before overwrite on import`
