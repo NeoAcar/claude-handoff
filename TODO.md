@@ -99,11 +99,6 @@ Gathered from two real-world export tests:
         (e.g., `npm notice Changelog: https://...`). Restrict to actual
         `user:pass@host` forms: `://[^:/@\s]+:[^@\s]+@`
 
-- [ ] **Selective export flags.** SPEC had `--last N`, `--session <id>`,
-      `--since <date>`, `--author <name>` listed for MVP. They were cut.
-      Real usage confirms need: sometimes you want to export only the latest
-      session, or exclude one that contains schoolwork, or share only a
-      specific collaborator's work. Add these flags to `export` and `list`.
 
 - [ ] **Memory folder support.** `~/.claude/projects/<slug>/memory/` was
       discovered in Phase 0 but deferred. In the day-2 demo handoff test,
