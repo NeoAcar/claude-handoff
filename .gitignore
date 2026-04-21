@@ -1,4 +1,5 @@
 node_modules/
 dist/
 .claude-handoff/
+.codex/
 *.tsbuildinfo
