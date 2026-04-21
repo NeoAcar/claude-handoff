@@ -5,7 +5,7 @@
  * with paths rewritten to portable placeholders and secrets redacted.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {
@@ -16,8 +16,8 @@ import {
 } from '../core/paths.js';
 import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
-import { deepRedact } from '../core/redactor.js';
-import type { RedactionHit } from '../core/redactor.js';
+import { deepRedact, parseCustomPatterns } from '../core/redactor.js';
+import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { ManifestEntry } from '../core/manifest.js';
 
@@ -29,6 +29,7 @@ export interface ExportOptions {
   session?: string;
   last?: number;
   since?: string;
+  stripProgress?: boolean;
 }
 
 interface ExportResult {
@@ -74,6 +75,28 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     }
   }
 
+  if (options.since) {
+    const sinceMs = Date.parse(options.since);
+    if (Number.isNaN(sinceMs)) {
+      throw new Error(
+        `Invalid --since value: "${options.since}". Use ISO date (e.g., 2026-04-01 or 2026-04-01T12:00:00Z).`,
+      );
+    }
+    const filtered: string[] = [];
+    for (const f of sessionFiles) {
+      const meta = await extractSessionMeta(f);
+      const firstMs = meta.firstTimestamp ? Date.parse(meta.firstTimestamp) : NaN;
+      if (!Number.isNaN(firstMs) && firstMs >= sinceMs) {
+        filtered.push(f);
+      }
+    }
+    sessionFiles = filtered;
+    if (sessionFiles.length === 0) {
+      console.log(`No sessions modified since ${options.since}.`);
+      return;
+    }
+  }
+
   if (options.last) {
     sessionFiles = sessionFiles.slice(0, options.last);
   }
@@ -96,6 +119,16 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   // Ensure output directories exist
   await mkdir(sessionsDir, { recursive: true });
   await mkdir(localDir, { recursive: true });
+
+  // Load user-supplied redaction patterns from .claude-handoff-ignore, if any.
+  // The file lives in the project root (not in .claude-handoff/) so a team can
+  // optionally commit it; format is one regex per line, # for comments.
+  const customPatterns = await loadCustomPatterns(projectRoot);
+  if (customPatterns.length > 0) {
+    console.log(
+      `Loaded ${customPatterns.length} custom redaction pattern(s) from .claude-handoff-ignore`,
+    );
+  }
 
   // Read or create manifest
   let manifest = await readManifest(sharedDir);
@@ -132,7 +165,15 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     // Transform: path rewrite + optional redaction
     let sessionHits: RedactionHit[] = [];
 
+    let strippedProgress = 0;
     const { count, stats } = await transformSession(sessionFile, outputPath, (record) => {
+      // Optionally drop streaming progress records — they're ~half of
+      // records in a big session but not needed to restore context.
+      if (options.stripProgress && record.type === 'progress') {
+        strippedProgress++;
+        return null;
+      }
+
       // Path rewrite
       let rewritten = deepRewrite(record, (s) =>
         localToPortable(s, projectRoot, localHome),
@@ -140,7 +181,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
 
       // Redaction
       if (!options.noRedact) {
-        const { value, hits } = deepRedact(rewritten);
+        const { value, hits } = deepRedact(rewritten, customPatterns);
         rewritten = value as SessionRecord;
         sessionHits.push(...hits);
       }
@@ -170,6 +211,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     let suffix = '';
     if (stats.recoveredLines > 0 || stats.skippedLines > 0) {
       suffix = ` [recovered ${stats.recoveredLines}, skipped ${stats.skippedLines}]`;
+    }
+    if (strippedProgress > 0) {
+      suffix += ` [stripped ${strippedProgress} progress]`;
     }
     console.log(`  Exported: ${exportFilename} — ${title} (${count} records)${suffix}`);
   }
@@ -266,6 +310,16 @@ function groupHits(
     };
   }
   return out;
+}
+
+async function loadCustomPatterns(projectRoot: string): Promise<RedactionPattern[]> {
+  const ignorePath = path.join(projectRoot, '.claude-handoff-ignore');
+  try {
+    const content = await readFile(ignorePath, 'utf-8');
+    return parseCustomPatterns(content);
+  } catch {
+    return [];
+  }
 }
 
 async function getGitUserName(): Promise<string | undefined> {

@@ -49,10 +49,19 @@ node dist/cli.js <command>
 ```
 --session <id>    Export one specific session
 --last <n>        Export the last N sessions
+--since <date>    Only export sessions started on/after this ISO date
 --author <name>   Tag with author name (default: git user.name)
 --dry-run         Show what would happen, write nothing
 --no-redact       Skip redaction (requires --i-know-what-im-doing)
+--strip-progress  Drop streaming progress records (smaller files)
 ```
+
+### Custom redaction patterns
+
+Optionally create a `.claude-handoff-ignore` file at the project root with one
+regex per line (`#` for comments). Each pattern is applied in addition to the
+built-in ones, with matches replaced by `[REDACTED:custom-N]`. Teams can
+commit this file to share redaction rules across the repo.
 
 ### Import options
 

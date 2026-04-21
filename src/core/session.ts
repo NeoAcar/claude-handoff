@@ -228,7 +228,7 @@ export async function writeRecords(
 export async function transformSession(
   inputPath: string,
   outputPath: string,
-  transform: (record: SessionRecord) => SessionRecord,
+  transform: (record: SessionRecord) => SessionRecord | null | undefined,
 ): Promise<{ count: number; stats: StreamStats }> {
   const stats = emptyStats();
 
@@ -244,7 +244,8 @@ export async function transformSession(
 
       try {
         const record = JSON.parse(trimmed) as SessionRecord;
-        yield transform(record);
+        const out = transform(record);
+        if (out) yield out;
         continue;
       } catch {
         // fall through to recovery
@@ -258,7 +259,8 @@ export async function transformSession(
         );
         stats.recoveredLines++;
         for (const r of recovered) {
-          yield transform(r);
+          const out = transform(r);
+          if (out) yield out;
         }
       } else {
         console.warn(`Warning: skipping malformed line at ${inputPath}:${lineNumber}`);
