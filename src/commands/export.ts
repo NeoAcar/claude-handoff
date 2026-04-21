@@ -28,6 +28,7 @@ import {
 import type { SourceArtifact } from '../core/store.js';
 import { extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
+import { stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
@@ -42,6 +43,14 @@ export interface ExportOptions {
   last?: number;
   since?: string;
   stripProgress?: boolean;
+  /**
+   * Strip `thinking` content blocks that carry a `signature` field.
+   * Default true — an unstripped signature is tied to the origin API
+   * key + model and causes a 400 on the next API turn after resume.
+   * Turn off when the recipient shares your API key/model and wants
+   * full thinking context preserved.
+   */
+  keepSignatures?: boolean;
 }
 
 interface ExportResult {
@@ -187,7 +196,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
         strippedProgress++;
         return null;
       }
-      let rewritten = deepRewrite(record, rewriteString) as SessionRecord;
+      const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
+      let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
       if (!options.noRedact) {
         const { value, hits } = deepRedact(rewritten, customPatterns);
         rewritten = value as SessionRecord;
@@ -224,7 +234,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
             strippedProgress++;
             return null;
           }
-          let rewritten = deepRewrite(record, rewriteString) as SessionRecord;
+          const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
+          let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
           if (!options.noRedact) {
             const { value, hits } = deepRedact(rewritten, customPatterns);
             rewritten = value as SessionRecord;

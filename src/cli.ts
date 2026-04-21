@@ -37,6 +37,11 @@ program
   .option('--no-redact', 'Skip secret redaction')
   .option('--i-know-what-im-doing', 'Required with --no-redact', false)
   .option('--strip-progress', 'Drop streaming progress records (smaller files)', false)
+  .option(
+    '--keep-signatures',
+    'Keep thinking.signature fields (default: strip to avoid API 400s after cross-machine resume)',
+    false,
+  )
   .action(async (opts) => {
     await run(() =>
       exportCommand(getProjectRoot(), {
@@ -48,6 +53,7 @@ program
         last: opts.last,
         since: opts.since,
         stripProgress: opts.stripProgress,
+        keepSignatures: opts.keepSignatures,
       }),
     );
   });
