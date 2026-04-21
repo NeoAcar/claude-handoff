@@ -3,6 +3,7 @@
  */
 
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import { findSlugForPath, computeSlug, getClaudeProjectsDir } from '../core/paths.js';
 import { listSessionFiles, extractSessionMeta } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
@@ -13,6 +14,13 @@ export async function statusCommand(projectRoot: string): Promise<void> {
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
 
+  // Load manifest up front so the local listing can flag sessions modified
+  // since the last export (freshness indicator).
+  const manifest = await readManifest(sharedDir);
+  const lastExportMs = manifest?.lastExportAt
+    ? new Date(manifest.lastExportAt).getTime()
+    : undefined;
+
   // Local sessions
   const localFiles = await listSessionFiles(slugDir);
   console.log(`Local sessions (${slugDir}):`);
@@ -20,13 +28,21 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     console.log('  (none)');
   } else {
     for (const f of localFiles) {
-      const meta = await extractSessionMeta(f);
+      const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
       const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+      const size = humanSize(fileStat.size);
+      const age = humanAge(fileStat.mtimeMs);
+      const fresh = lastExportMs !== undefined && fileStat.mtimeMs > lastExportMs ? ' *' : '';
       let suffix = '';
       if (meta.stats.malformedLines > 0) {
         suffix = ` [malformed ${meta.stats.malformedLines}: recovered ${meta.stats.recoveredLines}, skipped ${meta.stats.skippedLines}]`;
       }
-      console.log(`  ${meta.sessionId} — ${title} (${meta.recordCount} records)${suffix}`);
+      console.log(
+        `  ${meta.sessionId}${fresh} — ${title} (${meta.recordCount} records, ${size}, ${age})${suffix}`,
+      );
+    }
+    if (lastExportMs !== undefined) {
+      console.log('  (* = modified since last export)');
     }
   }
 
@@ -39,14 +55,14 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     console.log('  (none)');
   } else {
     for (const f of sharedFiles) {
-      const meta = await extractSessionMeta(f);
+      const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
       const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-      console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records)`);
+      console.log(
+        `  ${path.basename(f)} — ${title} (${meta.recordCount} records, ${humanSize(fileStat.size)})`,
+      );
     }
   }
 
-  // Manifest info
-  const manifest = await readManifest(sharedDir);
   if (manifest) {
     console.log(`\nLast export: ${manifest.lastExportAt}`);
     console.log(`Total exported: ${manifest.sessions.length} session(s)`);
@@ -70,4 +86,18 @@ export async function statusCommand(projectRoot: string): Promise<void> {
       }
     }
   }
+}
+
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function humanAge(mtimeMs: number): string {
+  const deltaSec = Math.max(0, (Date.now() - mtimeMs) / 1000);
+  if (deltaSec < 60) return `${Math.round(deltaSec)}s ago`;
+  if (deltaSec < 3600) return `${Math.round(deltaSec / 60)}m ago`;
+  if (deltaSec < 86400) return `${Math.round(deltaSec / 3600)}h ago`;
+  return `${Math.round(deltaSec / 86400)}d ago`;
 }
