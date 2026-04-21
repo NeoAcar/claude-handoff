@@ -8,13 +8,13 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { localToPortable, deepRewrite } from '../core/paths.js';
 import {
-  findSlugForPath,
+  findProjectStoreDir,
   getClaudeProjectsDir,
-  localToPortable,
-  deepRewrite,
-} from '../core/paths.js';
-import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
+  listProjectSessionFiles,
+} from '../core/store.js';
+import { extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 import { deepRedact, parseCustomPatterns } from '../core/redactor.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
@@ -51,19 +51,18 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   }
 
   const localHome = os.homedir();
-  const slug = await findSlugForPath(projectRoot);
-  const slugDir = slug
-    ? path.join(getClaudeProjectsDir(), slug)
-    : path.join(getClaudeProjectsDir(), '<not-found>');
+  const storeDir = await findProjectStoreDir(projectRoot);
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
   const localDir = path.join(projectRoot, '.claude-handoff');
 
   // Find session files
-  let sessionFiles = await listSessionFiles(slugDir);
+  let sessionFiles = await listProjectSessionFiles(projectRoot);
   if (sessionFiles.length === 0) {
     console.log('No Claude Code sessions found for this project.');
-    console.log(`Looked in: ${slugDir}`);
+    console.log(
+      `Looked in: ${storeDir ?? path.join(getClaudeProjectsDir(), '<no matching project store>')}`,
+    );
     return;
   }
 

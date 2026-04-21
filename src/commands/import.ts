@@ -8,13 +8,8 @@
 import { mkdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {
-  computeSlug,
-  findSlugForPath,
-  getClaudeProjectsDir,
-  portableToLocal,
-  deepRewrite,
-} from '../core/paths.js';
+import { portableToLocal, deepRewrite } from '../core/paths.js';
+import { getOrComputeStoreDir } from '../core/store.js';
 import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 
@@ -27,11 +22,10 @@ export interface ImportOptions {
 
 export async function importCommand(projectRoot: string, options: ImportOptions): Promise<void> {
   const localHome = os.homedir();
-  // Prefer reverse-match; fall back to computed slug when the directory
-  // doesn't exist yet (Neo's first import on this machine).
-  const existing = await findSlugForPath(projectRoot);
-  const slug = existing ?? computeSlug(projectRoot);
-  const slugDir = path.join(getClaudeProjectsDir(), slug);
+  // Find the existing store dir; if nothing matches, compute a target from
+  // the canonicalized project root. This covers Neo's first import on this
+  // machine when the slug dir doesn't exist yet.
+  const slugDir = await getOrComputeStoreDir(projectRoot);
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
 

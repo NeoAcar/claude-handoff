@@ -23,39 +23,19 @@ Key insights from the reference that we should apply:
 - **Auto-memory is keyed by canonical git root**, so worktrees share
   one memory store.
 
-### Phase 3A — Storage layer split (foundation)
+### Phase 3A — Storage layer split (foundation) ✅
 
-- [ ] New module `src/core/store.ts` with:
-  - `canonicalizeProjectRoot(path): Promise<string>` — realpath + NFC,
-    with graceful fallback when the path doesn't exist on disk
-  - `getClaudeProjectsDir(): string` — moved from `paths.ts`
-  - `sanitizeProjectKey(canonicalPath): string` — same regex rule as
-    the current `computeSlug`, but applied to canonical paths
-  - `findProjectStoreDir(projectRoot): Promise<string | null>` —
-    fast-path via key lookup, fallback by peeking at stored `cwd`
-    fields in candidate dirs' session files
-  - `getOrComputeStoreDir(projectRoot): Promise<string>` — convenience
-    for import, which needs a path even when the dir doesn't exist yet
-  - `listProjectSessionFiles(projectRoot): Promise<string[]>` — main
-    transcripts only, newest first
-  - `resolveMainSessionFile(sessionId, projectRoot?): Promise<string | null>`
-    — single-project lookup; cross-project scan when `projectRoot`
-    omitted
-- [ ] Shrink `src/core/paths.ts` to placeholder rewriting only. Remove
-      `computeSlug`, `findSlugForPath`, `getClaudeProjectsDir`,
-      `getProjectSlugDir`. Keep `localToPortable`, `portableToLocal`,
-      `deepRewrite`, placeholder constants, boundary-safe internals.
-- [ ] Rewire commands to use `store.ts`:
-  - `export.ts`: `findProjectStoreDir` + `listProjectSessionFiles`
-  - `import.ts`: `getOrComputeStoreDir`
-  - `status.ts`: `findProjectStoreDir` + `listProjectSessionFiles`
-- [ ] Tests:
-  - Add `test/core/store.test.ts` covering canonicalization,
-    project-key computation, fast-path lookup, fallback-via-cwd
-    lookup, and sessionId resolution. Use `mkdtemp` + fixture JSONL.
-  - Trim `test/core/paths.test.ts` to rewriting + `deepRewrite`; move
-    the slug / findSlugForPath cases to `store.test.ts`.
-- [ ] No behavior change for end users. 113+ tests green.
+Landed in `dcb9805` (store.ts additive) and the follow-up commit that
+shrinks paths.ts and rewires the commands. 117 tests pass (was 113).
+Smoke-tested on two real projects on disk.
+
+- [x] `src/core/store.ts` with `canonicalizeProjectRoot`,
+      `getClaudeProjectsDir`, `sanitizeProjectKey`,
+      `findProjectStoreDir`, `getOrComputeStoreDir`,
+      `listProjectSessionFiles`, `resolveMainSessionFile`.
+- [x] `src/core/paths.ts` shrunk to placeholder rewriting only.
+- [x] `export.ts`, `import.ts`, `status.ts` use `store.ts`.
+- [x] 30 tests in `store.test.ts`; `paths.test.ts` trimmed to 38.
 
 ### Phase 3B — Bundle manifest (session = main transcript + artifacts)
 

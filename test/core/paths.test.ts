@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  computeSlug,
-  findSlugForPath,
   localToPortable,
   portableToLocal,
   deepRewrite,
@@ -9,9 +7,7 @@ import {
   HOME_PLACEHOLDER,
 } from '../../src/core/paths.js';
 import { readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 
 // Load fixture expected values
 const expectedPath = join(
@@ -22,128 +18,6 @@ const expectedPath = join(
   'sample-session.expected.json',
 );
 const expected = JSON.parse(readFileSync(expectedPath, 'utf-8'));
-
-// --- Slug computation ---
-
-describe('computeSlug', () => {
-  it('handles standard Linux path', () => {
-    expect(computeSlug('/home/neo/work/cool-project')).toBe('-home-neo-work-cool-project');
-  });
-
-  it('handles macOS-style path', () => {
-    expect(computeSlug('/Users/alice/projectx')).toBe('-Users-alice-projectx');
-  });
-
-  it('replaces spaces with dashes (empirically confirmed)', () => {
-    expect(computeSlug('/home/alice/projects/Homework 3')).toBe('-home-alice-projects-Homework-3');
-  });
-
-  it('handles short path', () => {
-    expect(computeSlug('/tmp/test')).toBe('-tmp-test');
-  });
-
-  it('strips trailing slash', () => {
-    expect(computeSlug('/home/user/project/')).toBe('-home-user-project');
-  });
-
-  it('handles root path', () => {
-    expect(computeSlug('/')).toBe('-');
-  });
-
-  // Fixture-driven slug cases
-  for (const c of expected.slug_computation.cases) {
-    const label = c._unverified ? `${c.input} (UNVERIFIED hypothesis)` : c.input;
-    it(`fixture case: ${label}`, () => {
-      expect(computeSlug(c.input)).toBe(c.expected);
-    });
-  }
-
-  it('replaces dots with dashes', () => {
-    expect(computeSlug('/home/user/my.project')).toBe('-home-user-my-project');
-  });
-
-  it('handles multiple consecutive spaces', () => {
-    expect(computeSlug('/home/user/my  project')).toBe('-home-user-my--project');
-  });
-
-  it('handles Windows-style path with backslashes', () => {
-    // Backslashes normalize to /, and : (non-alnum) becomes dash.
-    expect(computeSlug('C:\\Users\\neo\\projectx')).toBe('C--Users-neo-projectx');
-  });
-
-  it('replaces underscores with dashes (day-2 bug regression)', () => {
-    expect(computeSlug('/home/user/my_project')).toBe('-home-user-my-project');
-  });
-
-  it('handles path with hyphens', () => {
-    expect(computeSlug('/home/user/my-project')).toBe('-home-user-my-project');
-  });
-
-  it('replaces each non-ASCII character with a dash', () => {
-    // Turkish characters (ü, ç, ı, ş) — each non-alphanumeric, non-dash
-    // character becomes a dash. Underscore also becomes dash.
-    expect(computeSlug('/home/user/Türkçe/proje_ışık')).toBe('-home-user-T-rk-e-proje----k');
-  });
-
-  it('replaces parentheses with dashes (day-2 empirical confirmation)', () => {
-    // Claude Code empirically produced this for /tmp/test.slug (v1)/project
-    expect(computeSlug('/tmp/test.slug (v1)/project')).toBe('-tmp-test-slug--v1--project');
-  });
-
-  it('replaces colons with dashes', () => {
-    expect(computeSlug('/home/user/file:name')).toBe('-home-user-file-name');
-  });
-});
-
-// --- Reverse-match slug lookup ---
-
-describe('findSlugForPath', () => {
-  let tmpHome: string;
-  let originalHome: string | undefined;
-
-  beforeAll(async () => {
-    tmpHome = await mkdtemp(join(tmpdir(), 'claude-handoff-findslug-'));
-    await mkdir(join(tmpHome, '.claude', 'projects'), { recursive: true });
-    // Seed realistic slug directories
-    const seeded = [
-      '-home-alice-projects-course-2526-team', // underscore path
-      '-home-alice-projects-myapp',
-      '-home-user-my-project', // came from /home/user/my_project OR /home/user/my.project etc.
-      '-tmp-test-slug--v1--project',
-    ];
-    for (const s of seeded) {
-      await mkdir(join(tmpHome, '.claude', 'projects', s), { recursive: true });
-    }
-    originalHome = process.env.HOME;
-    process.env.HOME = tmpHome;
-  });
-
-  afterAll(async () => {
-    if (originalHome === undefined) delete process.env.HOME;
-    else process.env.HOME = originalHome;
-    await rm(tmpHome, { recursive: true, force: true });
-  });
-
-  it('finds slug for path with underscores (day-2 bug regression)', async () => {
-    const result = await findSlugForPath('/home/alice/projects/course_2526_team');
-    expect(result).toBe('-home-alice-projects-course-2526-team');
-  });
-
-  it('finds slug for straightforward path', async () => {
-    const result = await findSlugForPath('/home/alice/projects/myapp');
-    expect(result).toBe('-home-alice-projects-myapp');
-  });
-
-  it('finds slug for path with parens and dots', async () => {
-    const result = await findSlugForPath('/tmp/test.slug (v1)/project');
-    expect(result).toBe('-tmp-test-slug--v1--project');
-  });
-
-  it('returns null when no matching slug exists', async () => {
-    const result = await findSlugForPath('/nonexistent/project/path');
-    expect(result).toBeNull();
-  });
-});
 
 // --- Path rewriting: local → portable ---
 

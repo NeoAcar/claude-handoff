@@ -78,6 +78,48 @@ describe('sanitizeProjectKey', () => {
   it('normalizes Windows backslashes to forward slashes first', () => {
     expect(sanitizeProjectKey('C:\\Users\\alice\\app')).toBe('C--Users-alice-app');
   });
+
+  it('handles standard Linux path', () => {
+    expect(sanitizeProjectKey('/home/neo/work/cool-project')).toBe('-home-neo-work-cool-project');
+  });
+
+  it('handles macOS-style path', () => {
+    expect(sanitizeProjectKey('/Users/alice/projectx')).toBe('-Users-alice-projectx');
+  });
+
+  it('replaces spaces with dashes', () => {
+    expect(sanitizeProjectKey('/home/alice/projects/Homework 3')).toBe(
+      '-home-alice-projects-Homework-3',
+    );
+  });
+
+  it('handles short path', () => {
+    expect(sanitizeProjectKey('/tmp/test')).toBe('-tmp-test');
+  });
+
+  it('handles root path', () => {
+    expect(sanitizeProjectKey('/')).toBe('-');
+  });
+
+  it('replaces dots with dashes', () => {
+    expect(sanitizeProjectKey('/home/user/my.project')).toBe('-home-user-my-project');
+  });
+
+  it('handles multiple consecutive spaces', () => {
+    expect(sanitizeProjectKey('/home/user/my  project')).toBe('-home-user-my--project');
+  });
+
+  it('preserves hyphens in paths', () => {
+    expect(sanitizeProjectKey('/home/user/my-project')).toBe('-home-user-my-project');
+  });
+
+  it('replaces non-ASCII characters with dashes (day-2 bug regression)', () => {
+    expect(sanitizeProjectKey('/home/user/Türkçe/proje_ışık')).toBe('-home-user-T-rk-e-proje----k');
+  });
+
+  it('replaces colons with dashes', () => {
+    expect(sanitizeProjectKey('/home/user/file:name')).toBe('-home-user-file-name');
+  });
 });
 
 describe('canonicalizeProjectRoot', () => {

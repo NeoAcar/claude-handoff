@@ -4,13 +4,20 @@
 
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
-import { findSlugForPath, computeSlug, getClaudeProjectsDir } from '../core/paths.js';
+import {
+  findProjectStoreDir,
+  getOrComputeStoreDir,
+  listProjectSessionFiles,
+} from '../core/store.js';
 import { listSessionFiles, extractSessionMeta } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 
 export async function statusCommand(projectRoot: string): Promise<void> {
-  const slug = (await findSlugForPath(projectRoot)) ?? computeSlug(projectRoot);
-  const slugDir = path.join(getClaudeProjectsDir(), slug);
+  // Resolve the Claude store dir for display; fall back to the computed
+  // target when nothing is found so the "looked in X" message is still
+  // useful.
+  const storeDir =
+    (await findProjectStoreDir(projectRoot)) ?? (await getOrComputeStoreDir(projectRoot));
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
 
@@ -22,8 +29,8 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     : undefined;
 
   // Local sessions
-  const localFiles = await listSessionFiles(slugDir);
-  console.log(`Local sessions (${slugDir}):`);
+  const localFiles = await listProjectSessionFiles(projectRoot);
+  console.log(`Local sessions (${storeDir}):`);
   if (localFiles.length === 0) {
     console.log('  (none)');
   } else {
