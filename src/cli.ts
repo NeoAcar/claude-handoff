@@ -47,6 +47,11 @@ program
     "Also export the project's auto-memory files (~/.claude/projects/<key>/memory/ except MEMORY.md)",
     false,
   )
+  .option(
+    '--force',
+    'Export even when the local session looks behind the shared bundle (bypasses fork detection)',
+    false,
+  )
   .action(async (opts) => {
     await run(() =>
       exportCommand(getProjectRoot(), {
@@ -60,6 +65,7 @@ program
         stripProgress: opts.stripProgress,
         keepSignatures: opts.keepSignatures,
         includeMemory: opts.memory,
+        force: opts.force,
       }),
     );
   });

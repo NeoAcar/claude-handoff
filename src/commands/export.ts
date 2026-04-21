@@ -15,7 +15,7 @@
  * (streaming for JSONL, buffered for JSON/markdown).
  */
 
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { localToPortable, deepRewrite } from '../core/paths.js';
@@ -60,6 +60,13 @@ export interface ExportOptions {
    * personal observations the user hasn't explicitly decided to share.
    */
   includeMemory?: boolean;
+  /**
+   * Override the fork-detection refusal: export even when the local
+   * session has fewer records than the shared bundle (which normally
+   * means a teammate shared newer work we haven't imported).
+   * Rarely needed — primarily an escape hatch for truly broken states.
+   */
+  force?: boolean;
 }
 
 interface ExportResult {
@@ -191,14 +198,55 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     const sourceMtimeMs = sourceStat.mtimeMs;
     const sourceRecordCount = meta.recordCount;
 
-    // Check if already exported
-    const alreadyExported = manifest.sessions.some((s) => s.sessionId === sessionId);
-    if (alreadyExported) {
-      console.log(`  Skipping ${sessionId} (already exported)`);
-      continue;
+    // Iteration-aware conflict handling. If we've already exported
+    // this session ID, decide based on whether the local source has
+    // changed since the bundle was captured:
+    //
+    //   no existing entry             → normal new export
+    //   entry without sourceMtimeMs   → legacy (pre-0.2.0) entry,
+    //                                    treat as "needs refresh" so
+    //                                    the format auto-upgrades
+    //   entry, mtime + count match    → truly unchanged, skip
+    //   entry, local count < bundle   → fork suspicion, refuse unless
+    //                                    --force (teammate's work
+    //                                    would be overwritten)
+    //   otherwise                     → local has new turns, re-export
+    //                                    and archive the old round
+    //                                    into previousExports
+    let previousExportsForEntry: Array<{ author: string; exportedAt: string }> | undefined;
+    const existingIndex = manifest.sessions.findIndex((s) => s.sessionId === sessionId);
+    if (existingIndex >= 0) {
+      const existing = manifest.sessions[existingIndex];
+      const knownMtime = existing.sourceMtimeMs;
+      const knownCount = existing.sourceRecordCount;
+      if (knownMtime !== undefined && knownCount !== undefined) {
+        if (knownMtime === sourceMtimeMs && knownCount === sourceRecordCount) {
+          console.log(`  Skipping ${sessionId} (no changes since last export)`);
+          continue;
+        }
+        if (sourceRecordCount < knownCount && !options.force) {
+          console.warn(
+            `  Refusing to export ${sessionId}: local has ${sourceRecordCount} records, ` +
+              `bundle was made from ${knownCount}. ` +
+              `This usually means a teammate already shared newer work. ` +
+              `Run \`claude-handoff import\` first, or pass --force to overwrite.`,
+          );
+          continue;
+        }
+      }
+      // Re-export path: archive the current round and drop the stale entry.
+      previousExportsForEntry = [
+        ...(existing.previousExports ?? []),
+        { author: existing.author, exportedAt: existing.exportedAt },
+      ];
+      manifest.sessions.splice(existingIndex, 1);
     }
 
     const bundleDir = path.join(sessionsDir, sessionId);
+    // Wipe any stale bundle contents so sidecars the user removed
+    // locally don't linger, and so v1-migrated flat files next to the
+    // bundle don't confuse import.
+    await rm(bundleDir, { recursive: true, force: true });
     await mkdir(bundleDir, { recursive: true });
 
     const sessionHits: RedactionHit[] = [];
@@ -336,6 +384,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sourceMtimeMs,
       sourceRecordCount,
       artifacts,
+      ...(previousExportsForEntry ? { previousExports: previousExportsForEntry } : {}),
     };
 
     manifest.sessions.push(entry);
