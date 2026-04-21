@@ -187,6 +187,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   for (const sessionFile of sessionFiles) {
     const meta = await extractSessionMeta(sessionFile);
     const sessionId = meta.sessionId;
+    const sourceStat = await stat(sessionFile);
+    const sourceMtimeMs = sourceStat.mtimeMs;
+    const sourceRecordCount = meta.recordCount;
 
     // Check if already exported
     const alreadyExported = manifest.sessions.some((s) => s.sessionId === sessionId);
@@ -330,6 +333,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       totalMalformed: mainTransform.stats.malformedLines,
       totalRecovered: mainTransform.stats.recoveredLines,
       totalSkipped: mainTransform.stats.skippedLines,
+      sourceMtimeMs,
+      sourceRecordCount,
       artifacts,
     };
 
