@@ -2,7 +2,7 @@
 
 Make Claude Code session context portable between machines via git.
 
-When Alice works with Claude Code on a project, all the conversation history, decisions, and accumulated context live in `~/.claude/projects/` — invisible to teammates. **claude-handoff** exports that context into the repo so Bob can import it and pick up exactly where Alice left off.
+When Alice works with Claude Code on a project, all the conversation history, decisions, and accumulated context live in `~/.claude/projects/` — invisible to teammates. **claude-handoff** exports that context into the repo so Neo can import it and pick up exactly where Alice left off.
 
 ## How it works
 
@@ -14,13 +14,13 @@ claude-handoff init            # One-time setup
 claude-handoff export          # Export sessions to .claude-shared/
 git add .claude-shared/ && git commit -m "handoff" && git push
 
-# Bob's machine
+# Neo's machine
 git pull
 claude-handoff import          # Import sessions to ~/.claude/projects/
 claude --resume                # Pick Alice's session and continue
 ```
 
-Alice's sessions appear in Bob's `/resume` picker with their original titles and full conversation history intact.
+Alice's sessions appear in Neo's `/resume` picker with their original titles and full conversation history intact.
 
 ## Install
 
@@ -64,7 +64,7 @@ node dist/cli.js <command>
 
 ## What it does
 
-1. **Path rewriting** — Absolute paths (`/home/alice/project/...`) become portable placeholders (`{{PROJECT_ROOT}}/...`) on export, then get rewritten to Bob's paths on import.
+1. **Path rewriting** — Absolute paths (`/home/alice/project/...`) become portable placeholders (`{{PROJECT_ROOT}}/...`) on export, then get rewritten to Neo's paths on import.
 
 2. **Secret redaction** — Scans for AWS keys, GitHub tokens, API keys, passwords, private keys, and bearer tokens. Replaces them with `[REDACTED:type]` placeholders. A redaction log is written locally for review.
 

@@ -51,7 +51,7 @@ function emptyStats(): StreamStats {
  * Returns the recovered records or null if recovery fails.
  *
  * Real-world case: Claude Code sometimes emits two JSON records
- * concatenated without a newline (observed in FinanceAi sessions).
+ * concatenated without a newline.
  */
 function trySplitConcatenated(line: string): SessionRecord[] | null {
   if (!line.includes('}{')) return null;

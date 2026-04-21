@@ -1,8 +1,8 @@
 /**
- * claude-handoff import — Bob's command.
+ * claude-handoff import — Neo's command.
  *
  * Copies session files from .claude-shared/sessions/ into ~/.claude/projects/<slug>/,
- * with portable placeholders rewritten to Bob's local paths.
+ * with portable placeholders rewritten to Neo's local paths.
  */
 
 import { mkdir, access } from 'node:fs/promises';
@@ -28,7 +28,7 @@ export interface ImportOptions {
 export async function importCommand(projectRoot: string, options: ImportOptions): Promise<void> {
   const localHome = os.homedir();
   // Prefer reverse-match; fall back to computed slug when the directory
-  // doesn't exist yet (Bob's first import on this machine).
+  // doesn't exist yet (Neo's first import on this machine).
   const existing = await findSlugForPath(projectRoot);
   const slug = existing ?? computeSlug(projectRoot);
   const slugDir = path.join(getClaudeProjectsDir(), slug);

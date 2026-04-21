@@ -1,9 +1,7 @@
 # Phase 0 Discovery — Empirical Findings
 
-**Date:** 2026-04-20  
-**Machine:** Linux (WSL2), kernel 6.6.87.2-microsoft-standard-WSL2  
-**User:** neo  
-**Home:** `/home/neo`  
+**Date:** 2026-04-20
+**Machine:** Linux
 **Claude Code version:** 2.1.81+ (as seen in session files)
 
 ---
@@ -18,7 +16,7 @@ backups/
 cache/
 debug/
 downloads/
-file-history/        — per-session file backups (29 subdirs)
+file-history/        — per-session file backups
 history.jsonl        — CLI command history
 ide/
 paste-cache/
@@ -37,43 +35,38 @@ todos/
 
 ### `~/.claude/projects/` — project slugs
 
+Each directory under `~/.claude/projects/` corresponds to one project the user has worked on. The directory name is the project's absolute path with each character that is not alphanumeric or dash replaced by a dash.
+
+Examples (generic):
+
 ```
--home-neo-Dersler-CV-HW2
--home-neo-Dersler-NLP-HW4
--home-neo-Dersler-NLP-Homework-3
--home-neo-PythonProjects-FinanceAi
--home-neo-PythonProjects-YZV405E-2526-Hedgehogs
--home-neo-PythonProjects-claude-handoff
--home-neo-PythonProjects-intern-apply-bot
+-home-alice-projects-myapp
+-home-alice-projects-data-pipeline
+-home-alice-projects-claude-handoff
 ```
 
 ### Slug format (Linux)
 
-**Rule:** The absolute project path with each `/` replaced by `-`.
+**Rule:** Every character that is not ASCII alphanumeric and not a dash is replaced with a dash.
 
-- `/home/neo/PythonProjects/FinanceAi` → `-home-neo-PythonProjects-FinanceAi`
+- `/home/alice/projects/myapp` → `-home-alice-projects-myapp`
+- `/home/alice/projects/my_data_pipeline` → `-home-alice-projects-my-data-pipeline` (underscore → dash)
+- `/home/alice/projects/Homework 3` → `-home-alice-projects-Homework-3` (space → dash)
 - Leading slash becomes a leading dash.
 - No trailing dash.
-
-This is consistent across all 7 project slugs on this machine.
 
 ### Contents of a project slug directory
 
 ```
-~/.claude/projects/-home-neo-PythonProjects-FinanceAi/
-├── 478ac4c8-1aba-4121-822d-63992c2fa058.jsonl    (2.0 MB, 645 lines)
-├── 478ac4c8-1aba-4121-822d-63992c2fa058/         (subagents dir)
+~/.claude/projects/-home-alice-projects-myapp/
+├── <session-uuid>.jsonl                (session transcript)
+├── <session-uuid>/                     (subagents dir, optional)
 │   └── subagents/
 │       ├── agent-*.jsonl
 │       └── agent-*.meta.json
-├── 7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl    (12 KB, 11 lines)
-├── 8bac1cb9-f239-4c3e-b511-8590380e2d51.jsonl    (1.2 MB)
-├── 8bac1cb9-f239-4c3e-b511-8590380e2d51/         (subagents dir)
 └── memory/
     ├── MEMORY.md
-    ├── feedback_claudemd_commit.md
-    ├── project_conventions.md
-    └── project_phase.md
+    └── *.md                            (individual memory files)
 ```
 
 **Key observations:**
@@ -86,20 +79,20 @@ This is consistent across all 7 project slugs on this machine.
 
 ## 4.2 JSONL Session File Schema
 
-Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8-1aba-4121-822d-63992c2fa058.jsonl` (645 lines).
+Inspected two real session files on disk (one short, one large).
 
 ### Message types observed
 
-| Type                    | Count (large session) | Purpose                                     |
-| ----------------------- | --------------------- | ------------------------------------------- |
-| `progress`              | 348                   | Streaming progress updates (tool execution) |
-| `assistant`             | 110                   | Claude's responses                          |
-| `user`                  | 85                    | User messages                               |
-| `file-history-snapshot` | 82                    | File state tracking for undo                |
-| `custom-title`          | 7                     | Session title (for /resume picker)          |
-| `agent-name`            | 7                     | Sub-agent naming                            |
-| `system`                | 5                     | System messages                             |
-| `last-prompt`           | 1                     | Last user prompt (for /resume display)      |
+| Type                    | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `progress`              | Streaming progress updates (tool execution) |
+| `assistant`             | Claude's responses                          |
+| `user`                  | User messages                               |
+| `file-history-snapshot` | File state tracking for undo                |
+| `custom-title`          | Session title (for /resume picker)          |
+| `agent-name`            | Sub-agent naming                            |
+| `system`                | System messages                             |
+| `last-prompt`           | Last user prompt (for /resume display)      |
 
 ### Record schemas (by type)
 
@@ -113,14 +106,14 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
   "type": "user",
   "message": {
     "role": "user",
-    "content": [{"type": "text", "text": "..."}]
+    "content": [{ "type": "text", "text": "..." }]
   },
   "uuid": "0d38e833-...",
   "timestamp": "2026-03-24T15:30:54.196Z",
   "permissionMode": "default",
   "userType": "external",
   "entrypoint": "claude-vscode",
-  "cwd": "/home/neo/PythonProjects/FinanceAi",      ← ABSOLUTE PATH
+  "cwd": "/home/alice/projects/myapp",      ← ABSOLUTE PATH
   "sessionId": "7d697ce2-...",
   "version": "2.1.81",
   "gitBranch": "main"
@@ -136,8 +129,8 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
   "message": {
     "role": "assistant",
     "content": [
-      {"type": "thinking", "thinking": "..."},
-      {"type": "tool_use", "id": "toolu_...", "name": "Read", "input": {"file_path": "/home/neo/..."}}
+      { "type": "thinking", "thinking": "..." },
+      { "type": "tool_use", "id": "toolu_...", "name": "Read", "input": { "file_path": "/home/alice/..." } }
     ]
   },
   "requestId": "req_...",
@@ -146,7 +139,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
   "timestamp": "2026-03-24T15:30:56.288Z",
   "userType": "external",
   "entrypoint": "claude-vscode",
-  "cwd": "/home/neo/PythonProjects/FinanceAi",      ← ABSOLUTE PATH
+  "cwd": "/home/alice/projects/myapp",      ← ABSOLUTE PATH
   "sessionId": "7d697ce2-...",
   "version": "2.1.81",
   "gitBranch": "main"
@@ -158,8 +151,8 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 ```json
 {
   "type": "custom-title",
-  "customTitle": "rag-retrieval-generation-pipeline",
-  "sessionId": "478ac4c8-..."
+  "customTitle": "example-session-title",
+  "sessionId": "aaaaaaaa-..."
 }
 ```
 
@@ -169,7 +162,7 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 {
   "type": "last-prompt",
   "lastPrompt": "how do i restart",
-  "sessionId": "478ac4c8-..."
+  "sessionId": "aaaaaaaa-..."
 }
 ```
 
@@ -188,14 +181,14 @@ Inspected: `7d697ce2-8540-4f1e-b764-05ce36abce98.jsonl` (11 lines) and `478ac4c8
 }
 ```
 
-#### `queue-operation` (only seen in small session)
+#### `queue-operation` (only seen in short sessions)
 
 ```json
 {
   "type": "queue-operation",
   "operation": "enqueue",
   "timestamp": "2026-03-24T15:30:54.172Z",
-  "sessionId": "7d697ce2-..."
+  "sessionId": "aaaaaaaa-..."
 }
 ```
 
@@ -240,7 +233,7 @@ Contains per-PID JSON files for currently running sessions:
 {
   "pid": 5020,
   "sessionId": "b396030e-...",
-  "cwd": "/home/neo/PythonProjects/claude-handoff",
+  "cwd": "/home/alice/projects/myapp",
   "startedAt": 1776696935461,
   "kind": "interactive",
   "entrypoint": "cli"
@@ -283,25 +276,24 @@ Content here
 
 ## 4.5 Hypothesis Test — Manual Round-Trip
 
-### Test performed (2026-04-20, second attempt — clean setup)
+### Test performed (clean setup)
 
 1. Created `/tmp/handoff-test-project/` with `git init` and a `README.md`
 2. Created `~/.claude/projects/-tmp-handoff-test-project/`
-3. Source: `50fba2b0-0a44-4893-ac5b-4b2b6513830e.jsonl` (72 lines) from the **NLP-Homework-3** project (original cwd: `/home/neo/Dersler/NLP/Homework 3`)
-4. Copied to destination as `6872089e-9423-4ac2-a554-09b7262a4787.jsonl` (fresh UUID)
-5. Rewrote all fields containing the original path to `/tmp/handoff-test-project`:
-   - `cwd` (top-level): 64 records
-   - `sessionId`: 67 records (remapped to the new UUID)
-   - `tool_use` inputs (`file_path`, etc.): 21 records
-   - `toolUseResult` (`stdout`, `notebook_path`, etc.): 12 records
-6. Verified: zero occurrences of old path or old session ID remaining
+3. Copied a real session file to the destination as a fresh UUID
+4. Rewrote all fields containing the original path to `/tmp/handoff-test-project`:
+   - `cwd` (top-level) on every record
+   - `sessionId` (remapped to the new UUID)
+   - `tool_use` inputs (`file_path`, etc.)
+   - `toolUseResult` (`stdout`, `notebook_path`, etc.)
+5. Verified: zero occurrences of the old path or old session ID remaining
 
 ### Result
 
-**PASSED.** User opened a separate terminal, ran `claude --resume` from `/tmp/handoff-test-project/`, and confirmed:
+**PASSED.** The user opened a separate terminal, ran `claude --resume` from `/tmp/handoff-test-project/`, and confirmed:
 
-1. The session appeared in the `/resume` picker (shown as "46 seconds ago")
-2. Selecting it loaded the **full chat history** from the NLP Homework 3 session
+1. The session appeared in the `/resume` picker
+2. Selecting it loaded the **full chat history** from the original session
 3. Context was fully restored — the session was usable
 
 ### Confirmed facts
@@ -310,7 +302,6 @@ Content here
 - **Fresh UUID filenames work.** The filename doesn't need to match the original session ID.
 - **`cwd` rewrite is sufficient.** No other machine-identity field (user ID, machine ID, etc.) blocks session loading.
 - **Cross-project transfer works.** A session from project A can be loaded in project B if the slug directory and `cwd` are set correctly.
-- **Slug rule includes spaces.** `/home/neo/Dersler/NLP/Homework 3` → `-home-neo-Dersler-NLP-Homework-3` (both `/` and ` ` become `-`).
 
 ### What this means for the tool
 
@@ -337,15 +328,14 @@ These are separate JSONL files for sub-agent conversations. They likely contain 
 
 ### File sizes
 
-- Small session (11 lines): 12 KB
-- Medium session (645 lines, with agents): 2.0 MB
-- Another medium session: 1.2 MB
+- Small session: ~12 KB
+- Medium session (with subagents): ~1–2 MB
 
 For a typical project with 5-10 sessions, expect 5-20 MB in `.claude-shared/`. Worth noting in README; git-lfs may be recommended for large projects.
 
 ### `progress` records
 
-These are streaming progress updates (tool execution output). They're ~54% of records by count. They may be safely excluded from export to reduce file size, as they're not needed for context resumption. **Test this assumption in Phase 1.**
+These are streaming progress updates (tool execution output). They're roughly half of records by count. They may be safely excluded from export to reduce file size, as they're not needed for context resumption. **Test this assumption in Phase 1.**
 
 ---
 
@@ -353,11 +343,9 @@ These are streaming progress updates (tool execution output). They're ~54% of re
 
 1. **`sessions-index.json` does not exist.** SPEC Sections 5.1, 5.2, and 8 reference it. The HANDOFF.md generator must parse metadata from JSONL files directly instead.
 
-2. **`package.json` does not exist yet.** CLAUDE.md references npm scripts (`npm run build`, `npm test`, etc.) that aren't wired up. No code has been written. This is expected — we're in Phase 0.
+2. **Memory files are plain markdown with frontmatter.** They don't contain absolute paths and are highly portable as-is. They could be included in handoff with minimal transformation.
 
-3. **Memory files are plain markdown with frontmatter.** They don't contain absolute paths and are highly portable as-is. They could be included in handoff with minimal transformation.
-
-4. **The `thinking` field in assistant messages may contain sensitive reasoning.** Consider whether to include or strip thinking blocks on export (they may reference secrets or internal decision-making the user prefers not to share).
+3. **The `thinking` field in assistant messages may contain sensitive reasoning.** Consider whether to include or strip thinking blocks on export (they may reference secrets or internal decision-making the user prefers not to share).
 
 ---
 

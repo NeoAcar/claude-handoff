@@ -4,7 +4,7 @@ set -euo pipefail
 #
 # roundtrip-test.sh — End-to-end round-trip test for claude-handoff.
 #
-# Simulates: Alice exports a session → git push/pull → Bob imports it.
+# Simulates: Alice exports a session → git push/pull → Neo imports it.
 # Validates that the final session file exists with correct cwd rewriting.
 #
 # SAFETY: Only touches ~/.claude/projects/-tmp-handoff-rt-* paths.
@@ -13,15 +13,16 @@ set -euo pipefail
 
 # --- Configuration ---
 ALICE_DIR="/tmp/handoff-rt-alice"
-BOB_DIR="/tmp/handoff-rt-bob"
+NEO_DIR="/tmp/handoff-rt-neo"
 ALICE_SLUG="-tmp-handoff-rt-alice"
-BOB_SLUG="-tmp-handoff-rt-bob"
+NEO_SLUG="-tmp-handoff-rt-neo"
 CLAUDE_PROJECTS="$HOME/.claude/projects"
 CLI="$(cd "$(dirname "$0")/.." && pwd)/dist/cli.js"
 
-# Source session to copy (short, 72 lines, NLP homework)
-SOURCE_SESSION="$CLAUDE_PROJECTS/-home-neo-Dersler-NLP-Homework-3/50fba2b0-0a44-4893-ac5b-4b2b6513830e.jsonl"
-SOURCE_CWD="/home/neo/Dersler/NLP/Homework 3"
+# Source session to copy — uses the synthetic test fixture by default.
+# Override with: SOURCE_SESSION=/path/to/real.jsonl SOURCE_CWD=/original/project ./scripts/roundtrip-test.sh
+SOURCE_SESSION="${SOURCE_SESSION:-$(cd "$(dirname "$0")/.." && pwd)/test/fixtures/sessions/sample-session.jsonl}"
+SOURCE_CWD="${SOURCE_CWD:-/fake/user/fake-project}"
 ALICE_SESSION_ID="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 # --- Safety checks ---
@@ -32,8 +33,8 @@ if [[ "$ALICE_SLUG" != -tmp-handoff-rt-* ]]; then
     echo "ABORT: ALICE_SLUG '$ALICE_SLUG' does not match safety pattern -tmp-handoff-rt-*"
     exit 1
 fi
-if [[ "$BOB_SLUG" != -tmp-handoff-rt-* ]]; then
-    echo "ABORT: BOB_SLUG '$BOB_SLUG' does not match safety pattern -tmp-handoff-rt-*"
+if [[ "$NEO_SLUG" != -tmp-handoff-rt-* ]]; then
+    echo "ABORT: NEO_SLUG '$NEO_SLUG' does not match safety pattern -tmp-handoff-rt-*"
     exit 1
 fi
 
@@ -51,27 +52,27 @@ if [[ ! -f "$CLI" ]]; then
 fi
 
 echo "  ALICE_SLUG: $ALICE_SLUG (safe)"
-echo "  BOB_SLUG:   $BOB_SLUG (safe)"
+echo "  NEO_SLUG:   $NEO_SLUG (safe)"
 echo "  Source:     $SOURCE_SESSION (exists)"
 echo "  CLI:        $CLI (exists)"
 echo ""
 
 # --- Cleanup from previous runs ---
 echo "=== CLEANUP ==="
-rm -rf "$ALICE_DIR" "$BOB_DIR"
+rm -rf "$ALICE_DIR" "$NEO_DIR"
 rm -rf "$CLAUDE_PROJECTS/$ALICE_SLUG"
-rm -rf "$CLAUDE_PROJECTS/$BOB_SLUG"
+rm -rf "$CLAUDE_PROJECTS/$NEO_SLUG"
 echo "  Cleaned previous test artifacts"
 echo ""
 
 # --- Step 1: Create test project directories ---
 echo "=== STEP 1: Create test project directories ==="
 mkdir -p "$ALICE_DIR"
-mkdir -p "$BOB_DIR"
+mkdir -p "$NEO_DIR"
 cd "$ALICE_DIR" && git init && echo "# Alice's project" > README.md && git add . && git commit -m "init" --quiet
-cd "$BOB_DIR" && git init && echo "# Bob's project" > README.md && git add . && git commit -m "init" --quiet
+cd "$NEO_DIR" && git init && echo "# Neo's project" > README.md && git add . && git commit -m "init" --quiet
 echo "  Created $ALICE_DIR (git init)"
-echo "  Created $BOB_DIR (git init)"
+echo "  Created $NEO_DIR (git init)"
 echo ""
 
 # --- Step 2: Create fake slug directory with rewritten session ---
@@ -196,48 +197,48 @@ else
 fi
 echo ""
 
-# --- Step 4: Copy .claude-shared/ from Alice to Bob (simulates git push/pull) ---
-echo "=== STEP 4: Copy .claude-shared/ from Alice to Bob ==="
-cp -r "$ALICE_DIR/.claude-shared" "$BOB_DIR/.claude-shared"
-echo "  Copied .claude-shared/ to Bob's directory"
+# --- Step 4: Copy .claude-shared/ from Alice to Neo (simulates git push/pull) ---
+echo "=== STEP 4: Copy .claude-shared/ from Alice to Neo ==="
+cp -r "$ALICE_DIR/.claude-shared" "$NEO_DIR/.claude-shared"
+echo "  Copied .claude-shared/ to Neo's directory"
 echo ""
 
-# --- Step 5: Run claude-handoff import from Bob's dir ---
-echo "=== STEP 5: Bob runs import ==="
-cd "$BOB_DIR"
+# --- Step 5: Run claude-handoff import from Neo's dir ---
+echo "=== STEP 5: Neo runs import ==="
+cd "$NEO_DIR"
 echo "  Running: node $CLI import"
 node "$CLI" import
 echo ""
 
-# --- Step 6: Verify Bob's session file ---
-echo "=== STEP 6: Verify Bob's imported session ==="
-BOB_SLUG_DIR="$CLAUDE_PROJECTS/$BOB_SLUG"
-echo "  Bob's slug directory: $BOB_SLUG_DIR"
+# --- Step 6: Verify Neo's session file ---
+echo "=== STEP 6: Verify Neo's imported session ==="
+NEO_SLUG_DIR="$CLAUDE_PROJECTS/$NEO_SLUG"
+echo "  Neo's slug directory: $NEO_SLUG_DIR"
 echo "  Contents:"
-ls -la "$BOB_SLUG_DIR/" 2>&1 | while read -r line; do
+ls -la "$NEO_SLUG_DIR/" 2>&1 | while read -r line; do
     echo "    $line"
 done
 echo ""
 
-BOB_SESSION=$(find "$BOB_SLUG_DIR" -name "*.jsonl" 2>/dev/null | head -1)
-if [[ -z "$BOB_SESSION" ]]; then
-    echo "  FAIL: No .jsonl file found in Bob's slug directory"
+NEO_SESSION=$(find "$NEO_SLUG_DIR" -name "*.jsonl" 2>/dev/null | head -1)
+if [[ -z "$NEO_SESSION" ]]; then
+    echo "  FAIL: No .jsonl file found in Neo's slug directory"
     echo ""
     echo "=== RESULT: FAIL ==="
     exit 1
 fi
 
-echo "  Bob's session file: $BOB_SESSION"
+echo "  Neo's session file: $NEO_SESSION"
 echo ""
 
-echo "  Checking cwd values in Bob's session:"
+echo "  Checking cwd values in Neo's session:"
 python3 -c "
 import json
-with open('$BOB_SESSION') as f:
+with open('$NEO_SESSION') as f:
     cwds = set()
     has_placeholder = False
     has_alice = False
-    has_bob = False
+    has_neo = False
     has_original = False
     for line in f:
         d = json.loads(line)
@@ -247,8 +248,8 @@ with open('$BOB_SESSION') as f:
             has_placeholder = True
         if '$ALICE_DIR' in line:
             has_alice = True
-        if '$BOB_DIR' in line:
-            has_bob = True
+        if '$NEO_DIR' in line:
+            has_neo = True
         if '$SOURCE_CWD' in line:
             has_original = True
 
@@ -256,10 +257,10 @@ with open('$BOB_SESSION') as f:
         print(f'  cwd: {c}')
 
     print()
-    if '$BOB_DIR' in cwds:
-        print('  OK: CWD is Bob path ($BOB_DIR)')
+    if '$NEO_DIR' in cwds:
+        print('  OK: CWD is Neo path ($NEO_DIR)')
     else:
-        print('  FAIL: CWD is not Bob path')
+        print('  FAIL: CWD is not Neo path')
 
     if has_placeholder:
         print('  FAIL: Still contains {{PROJECT_ROOT}} placeholders')
@@ -282,7 +283,7 @@ echo ""
 echo "=== STEP 7: Verify tool_use input paths ==="
 python3 -c "
 import json
-with open('$BOB_SESSION') as f:
+with open('$NEO_SESSION') as f:
     for i, line in enumerate(f):
         d = json.loads(line)
         msg = d.get('message', {})
@@ -294,11 +295,11 @@ with open('$BOB_SESSION') as f:
                     fp = inp.get('file_path', '')
                     cmd = inp.get('command', '')
                     if fp:
-                        ok = fp.startswith('$BOB_DIR')
+                        ok = fp.startswith('$NEO_DIR')
                         status = 'OK' if ok else 'FAIL'
                         print(f'  Line {i+1}: {c[\"name\"]} file_path={fp[:80]} [{status}]')
-                    if cmd and '$BOB_DIR' in cmd:
-                        print(f'  Line {i+1}: {c[\"name\"]} command contains Bob path [OK]')
+                    if cmd and '$NEO_DIR' in cmd:
+                        print(f'  Line {i+1}: {c[\"name\"]} command contains Neo path [OK]')
                     if cmd and '$ALICE_DIR' in cmd:
                         print(f'  Line {i+1}: {c[\"name\"]} command still has Alice path [FAIL]')
                     if cmd and '$SOURCE_CWD' in cmd:
@@ -311,11 +312,11 @@ echo "=========================================="
 echo "=== ROUND-TRIP TEST COMPLETE ==="
 echo "=========================================="
 echo ""
-echo "Bob's session file ready at:"
-echo "  $BOB_SESSION"
+echo "Neo's session file ready at:"
+echo "  $NEO_SESSION"
 echo ""
 echo "To manually verify with Claude Code:"
-echo "  cd $BOB_DIR && claude --resume"
+echo "  cd $NEO_DIR && claude --resume"
 echo ""
 echo "To cleanup after testing:"
-echo "  rm -rf $ALICE_DIR $BOB_DIR $CLAUDE_PROJECTS/$ALICE_SLUG $CLAUDE_PROJECTS/$BOB_SLUG"
+echo "  rm -rf $ALICE_DIR $NEO_DIR $CLAUDE_PROJECTS/$ALICE_SLUG $CLAUDE_PROJECTS/$NEO_SLUG"

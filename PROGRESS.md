@@ -30,14 +30,9 @@ Completed 2026-04-20. End-to-end round-trip validated.
 
 ### End-to-end validation
 
-Round-trip test: Alice exports → git push/pull simulation → Bob imports → `claude --resume` loads the session with full context restored.
+Round-trip test: Alice exports → git push/pull simulation → Neo imports → `claude --resume` loads the session with full context restored.
 
-**Evidence of full context preservation:** After importing the NLP Homework 3 session into a different project directory, Claude Code correctly recalled:
-
-- Specific numeric outputs: `A[0,0]: 0.000007040`, `accuracy: 0.9531`
-- Exact code markers from the notebook: `### START CODE HERE ###`
-- Helper function names: `get_word_tag`, `preprocess`
-- The smoothing formula used in the transition matrix
+**Evidence of full context preservation:** After importing a session into a different project directory, Claude Code correctly recalled specific numeric outputs, exact code markers, helper function names, and formulas from the original session.
 
 This is only possible if the full `tool_result` content (Read outputs, Bash stdout) survived the export→import pipeline intact through path rewriting and redaction.
 

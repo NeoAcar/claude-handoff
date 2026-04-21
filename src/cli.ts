@@ -52,7 +52,7 @@ program
 
 program
   .command('import')
-  .description("Import shared sessions from .claude-shared/ (Bob's command)")
+  .description("Import shared sessions from .claude-shared/ (Neo's command)")
   .option('--session <id>', 'Import one specific session')
   .option('--all', 'Import everything (default)', true)
   .option('--dry-run', 'Preview path rewrites and destination', false)

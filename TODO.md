@@ -19,7 +19,7 @@
 
 - **thinking.signature field** — Do thinking signatures validate across machines? The `thinking.signature` field is an Anthropic-internal cryptographic value (not a user secret), but if exported sessions reproduce these in shared contexts, verify whether they're machine/account-tied. Test during a real cross-machine round-trip.
 - **message.id field** — Fields like `msg_018vP5DYx5EAuAmzny5SbcLH` were not remapped during export. Likely fine but inconsistent with path-neutrality goals. Decide whether to remap these for full machine-neutrality.
-- **Session forking** — What happens when Alice exports, Bob imports, Bob continues, Bob exports? Design the merge/fork strategy (keep both? overwrite? namespace by author?).
+- **Session forking** — What happens when Alice exports, Neo imports, Neo continues, Neo exports? Design the merge/fork strategy (keep both? overwrite? namespace by author?).
 
 ### Polish
 
@@ -31,9 +31,9 @@
 ## Bugs from real-world use (day 1)
 
 - [ ] Parser crashes on malformed JSONL in real sessions. Example:
-      FinanceAi session 8bac1cb9, line 350 appears to be two JSON
-      records concatenated without a newline separator (length 2051,
-      jq fails at column 135 with "invalid numeric literal").
+      a real session's line 350 appears to be two JSON records
+      concatenated without a newline separator (length 2051, jq
+      fails at column 135 with "invalid numeric literal").
       Root cause likely in Claude Code itself, not our tool.
       Fix required in src/core/session.ts — streamRecords should: - Catch parse errors per line - Attempt recovery (e.g., split on `}{` boundaries as a fallback) - Log warning, skip the line, continue processing - Report count of skipped lines in export summary
       Add a fixture with a corrupted/concatenated line for regression testing.
@@ -47,9 +47,9 @@
       and observing Claude Code produced slug `-tmp-test-slug--v1--project`.
 
       Real example that caused a false "no sessions" report:
-        Path: /home/neo/PythonProjects/YZV405E_2526_Hedgehogs
-        Claude Code slug: -home-neo-PythonProjects-YZV405E-2526-Hedgehogs (underscores → dashes)
-        Our computed slug: -home-neo-PythonProjects-YZV405E_2526_Hedgehogs (underscores kept)
+        Path: /home/alice/projects/course_2526_team
+        Claude Code slug: -home-alice-projects-course-2526-team (underscores → dashes)
+        Our computed slug: -home-alice-projects-course_2526_team (underscores kept)
         Result: claude-handoff status reported "(none)" while real sessions existed.
 
       **Preferred fix: switch to reverse-matching instead of computing slugs.**
@@ -65,18 +65,18 @@
 
 ## What we learned from day-2 real-world testing
 
-- Tool worked fine on `intern-apply-bot` (574 records, title extracted)
-- Tool crashed on `FinanceAi` (corrupted line — day-1 bug)
-- Tool silently failed on `YZV405E_2526_Hedgehogs` (slug bug — day-2 bug)
+- Tool worked fine on a clean project (574 records, title extracted)
+- Tool crashed on a project with a corrupted session line (day-1 bug)
+- Tool silently failed on a project with underscores in its path (day-2 bug)
 - Speculative Phase 2 features (HANDOFF.md generator, interactive picker,
   --last N filter, memory support, .claude-handoff-ignore, thinking
   signature investigation) were NOT observed as actual pain points during
   real use. Park them until more real usage generates real signal.
 
-
 ## Phase 2.1 — Real-world usage signals (day 2, after demo handoff test)
 
 Gathered from two real-world export tests:
+
 - `claude-handoff` repo itself (2 sessions, 700+ records, heavy self-referential content)
 - `handoff-demo` toy project (1 session, 40 records, clean case)
 
@@ -98,7 +98,6 @@ Gathered from two real-world export tests:
       - Tune the `url-with-creds` regex — currently catches normal URLs
         (e.g., `npm notice Changelog: https://...`). Restrict to actual
         `user:pass@host` forms: `://[^:/@\s]+:[^@\s]+@`
-
 
 - [ ] **Memory folder support.** `~/.claude/projects/<slug>/memory/` was
       discovered in Phase 0 but deferred. In the day-2 demo handoff test,
@@ -123,10 +122,10 @@ Gathered from two real-world export tests:
       from `.claude-shared/sessions/` with `cat` is unreadable — pure JSON
       blobs. Users and reviewers need a safe way to peek at a shared
       session before pulling or pushing. Build `claude-handoff inspect
-      <session-id>` that prints: user message count, assistant response
+    <session-id>` that prints: user message count, assistant response
       count, tool_use summary, redaction summary, first/last timestamps.
       Never print raw content. Same philosophy as `.claude/commands/
-      inspect-session.md`.
+    inspect-session.md`.
 
 - [ ] **Conflict behavior on import.** If a session with the same ID
       already exists in `~/.claude/projects/<slug>/`, current behavior is

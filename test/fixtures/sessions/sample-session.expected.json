@@ -29,29 +29,29 @@
     }
   },
   "import": {
-    "_comment": "Result of importing with localRoot=/home/bob/work/cool-project, localHome=/home/bob",
-    "localRoot": "/home/bob/work/cool-project",
-    "localHome": "/home/bob",
+    "_comment": "Result of importing with localRoot=/home/neo/work/cool-project, localHome=/home/neo",
+    "localRoot": "/home/neo/work/cool-project",
+    "localHome": "/home/neo",
     "sample_records": {
       "line_4_tool_use_read": {
-        "description": "Read tool_use: file_path should use Bob's root",
-        "input_file_path": "/home/bob/work/cool-project/HW3.ipynb"
+        "description": "Read tool_use: file_path should use Neo's root",
+        "input_file_path": "/home/neo/work/cool-project/HW3.ipynb"
       },
       "line_6_tool_use_bash": {
-        "description": "Bash tool_use: command should use Bob's root",
-        "input_command": "wc -l \"/home/bob/work/cool-project/HW3.ipynb\""
+        "description": "Bash tool_use: command should use Neo's root",
+        "input_command": "wc -l \"/home/neo/work/cool-project/HW3.ipynb\""
       },
       "line_7_tool_result_bash": {
-        "description": "Bash tool_result: stdout should use Bob's root",
-        "toolUseResult_stdout": "1891 /home/bob/work/cool-project/HW3.ipynb"
+        "description": "Bash tool_result: stdout should use Neo's root",
+        "toolUseResult_stdout": "1891 /home/neo/work/cool-project/HW3.ipynb"
       },
       "line_2_user_cwd": {
-        "description": "User message cwd should use Bob's root",
-        "cwd": "/home/bob/work/cool-project"
+        "description": "User message cwd should use Neo's root",
+        "cwd": "/home/neo/work/cool-project"
       },
       "line_13_bash_cd": {
-        "description": "Bash command with cd should use Bob's root",
-        "input_command_prefix": "cd \"/home/bob/work/cool-project\" && conda run -n base python3 -c \"\nfro"
+        "description": "Bash command with cd should use Neo's root",
+        "input_command_prefix": "cd \"/home/neo/work/cool-project\" && conda run -n base python3 -c \"\nfro"
       }
     }
   },
@@ -59,16 +59,16 @@
     "_comment": "Expected slug outputs for various paths",
     "cases": [
       {
-        "input": "/home/bob/work/cool-project",
-        "expected": "-home-bob-work-cool-project"
+        "input": "/home/neo/work/cool-project",
+        "expected": "-home-neo-work-cool-project"
       },
       {
         "input": "/Users/alice/projectx",
         "expected": "-Users-alice-projectx"
       },
       {
-        "input": "/home/neo/Dersler/NLP/Homework 3",
-        "expected": "-home-neo-Dersler-NLP-Homework-3"
+        "input": "/home/alice/projects/Homework 3",
+        "expected": "-home-alice-projects-Homework-3"
       },
       {
         "input": "/tmp/test",
@@ -83,8 +83,8 @@
         "expected": "-home-user-project--copy-"
       },
       {
-        "input": "/home/neo/PythonProjects/YZV405E_2526_Hedgehogs",
-        "expected": "-home-neo-PythonProjects-YZV405E-2526-Hedgehogs"
+        "input": "/home/alice/projects/course_2526_team",
+        "expected": "-home-alice-projects-course-2526-team"
       },
       {
         "input": "/tmp/test.slug (v1)/project",

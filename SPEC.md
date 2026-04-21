@@ -16,7 +16,7 @@ Claude Code is powerful locally but its "project memory" is **not portable**. Wh
    - `~/.claude/projects/<project-slug>/sessions-index.json` — session metadata (auto-summaries, timestamps, git branch, message counts)
    - Auto-memory files — observations Claude accumulated about the project over time
 
-When Alice pushes her branch and Bob pulls it, Bob gets the code and the configuration, but **none of the conversational context, decisions, or accumulated memory**. Bob has to re-explain the project to Claude Code from scratch. This is the gap we are closing.
+When Alice pushes her branch and Neo pulls it, Neo gets the code and the configuration, but **none of the conversational context, decisions, or accumulated memory**. Neo has to re-explain the project to Claude Code from scratch. This is the gap we are closing.
 
 ## 2. The Goal
 
@@ -24,7 +24,7 @@ Build a small, focused CLI tool — **`claude-handoff`** — that makes Claude C
 
 The tool lets Alice run `claude-handoff export` after a work session. It copies the relevant session files out of `~/.claude/` and into `./.claude-shared/` inside the repo, with paths rewritten to be machine-independent and secrets redacted. Alice commits this folder like any other artifact.
 
-Bob pulls the repo and runs `claude-handoff import`. The tool copies files back into his own `~/.claude/projects/` with paths rewritten to his machine. When Bob opens Claude Code, the `/resume` picker shows Alice's sessions. Bob picks one and continues the exact conversation.
+Neo pulls the repo and runs `claude-handoff import`. The tool copies files back into his own `~/.claude/projects/` with paths rewritten to his machine. When Neo opens Claude Code, the `/resume` picker shows Alice's sessions. Neo picks one and continues the exact conversation.
 
 **Non-goal:** we are not building a real-time sync or cloud service. This is a local, explicit, git-based workflow.
 
@@ -36,9 +36,9 @@ The MVP works if all of these are true:
 
 - [ ] Alice can run `claude-handoff export` after a Claude Code session.
 - [ ] The resulting `.claude-shared/` folder commits cleanly to git and contains no absolute paths from Alice's machine and no obvious secrets.
-- [ ] Bob, on a different OS if possible, runs `claude-handoff import` after pulling.
-- [ ] Bob opens Claude Code in the project and `/resume` lists Alice's sessions with their original summaries.
-- [ ] Bob picks a session and Claude Code behaves as if continuing — it references the earlier decisions, file changes, and reasoning from Alice's turn.
+- [ ] Neo, on a different OS if possible, runs `claude-handoff import` after pulling.
+- [ ] Neo opens Claude Code in the project and `/resume` lists Alice's sessions with their original summaries.
+- [ ] Neo picks a session and Claude Code behaves as if continuing — it references the earlier decisions, file changes, and reasoning from Alice's turn.
 
 If any of the above fails, the tool has not delivered its value.
 
@@ -93,8 +93,8 @@ Run `/memory` inside Claude Code or check whether there's a `MEMORY.md` or equiv
 
 Before building the tool, **test the concept by hand**:
 
-1. Copy a session folder from one location to another (simulating Alice → Bob) with edited paths.
-2. On the "Bob" side, launch Claude Code in the target project.
+1. Copy a session folder from one location to another (simulating Alice → Neo) with edited paths.
+2. On the "Neo" side, launch Claude Code in the target project.
 3. Does `/resume` show the copied session?
 4. Does picking it actually restore context?
 
@@ -109,9 +109,9 @@ If yes: proceed. If no: the whole premise needs rethinking — stop and report f
 Two machines, one repo, a folder in the repo as the exchange medium.
 
 ```
-Alice's machine                  Git repo                   Bob's machine
+Alice's machine                  Git repo                   Neo's machine
 ~/.claude/projects/              .claude-shared/            ~/.claude/projects/
-  -Users-alice-projectx/   →       sessions/         →        -Users-bob-projectx/
+  -Users-alice-projectx/   →       sessions/         →        -Users-neo-projectx/
     session-A.jsonl                  session-A.jsonl            session-A.jsonl
     session-B.jsonl                  session-B.jsonl            session-B.jsonl
     sessions-index.json              sessions-index.json        sessions-index.json
@@ -122,7 +122,7 @@ Alice's machine                  Git repo                   Bob's machine
 Two transformations happen at the boundaries:
 
 - **Export (Alice → repo):** absolutize-to-portable — rewrite machine-specific paths to portable placeholders, redact secrets, strip user-identifying fields.
-- **Import (repo → Bob):** portable-to-absolutize — rewrite placeholders back to Bob's real paths, put files in Bob's `~/.claude/projects/` slug.
+- **Import (repo → Neo):** portable-to-absolutize — rewrite placeholders back to Neo's real paths, put files in Neo's `~/.claude/projects/` slug.
 
 ### 5.2 Repo layout produced by export
 
@@ -132,7 +132,7 @@ Two transformations happen at the boundaries:
 │   ├── sessions/
 │   │   ├── 2026-04-18T14-32_alice_session-abc123.jsonl
 │   │   ├── 2026-04-18T16-01_alice_session-def456.jsonl
-│   │   └── 2026-04-20T09-15_bob_session-ghi789.jsonl
+│   │   └── 2026-04-20T09-15_neo_session-ghi789.jsonl
 │   ├── sessions-index.json
 │   ├── HANDOFF.md              # Human-readable, auto-generated + hand-edited
 │   ├── .manifest.json          # Tool version, schema version, export timestamp
@@ -151,7 +151,7 @@ Session filenames include timestamp and author for human scannability in `git lo
 claude-handoff init              # One-time: set up .claude-shared/, gitignore entries, config
 claude-handoff status            # Show: local sessions, shared sessions, diff
 claude-handoff export [opts]     # Alice's command
-claude-handoff import [opts]     # Bob's command
+claude-handoff import [opts]     # Neo's command
 claude-handoff list              # List sessions in .claude-shared/
 claude-handoff redact --preview  # Dry-run redaction on a session
 ```
@@ -191,18 +191,18 @@ This is the single most error-prone part of the project. Get it right.
 
 ### 6.2 Import-side rewrite
 
-1. Determine Bob's `$LOCAL_ROOT` and `$LOCAL_HOME` the same way.
+1. Determine Neo's `$LOCAL_ROOT` and `$LOCAL_HOME` the same way.
 2. Replace `{{PROJECT_ROOT}}` → `$LOCAL_ROOT`.
 3. Replace `{{HOME}}` → `$LOCAL_HOME`.
-4. Compute Bob's slug for `~/.claude/projects/` and place files there.
+4. Compute Neo's slug for `~/.claude/projects/` and place files there.
 
 ### 6.3 Slug computation
 
 Must be OS-aware:
 
-- macOS: `/Users/bob/projectx` → `-Users-bob-projectx`
-- Linux: `/home/bob/projectx` → `-home-bob-projectx`
-- Windows: `C:\Users\bob\projectx` → likely something like `C--Users-bob-projectx` — **verify on a Windows machine or skip Windows in MVP**
+- macOS: `/Users/neo/projectx` → `-Users-neo-projectx`
+- Linux: `/home/neo/projectx` → `-home-neo-projectx`
+- Windows: `C:\Users\neo\projectx` → likely something like `C--Users-neo-projectx` — **verify on a Windows machine or skip Windows in MVP**
 
 Confirm the exact slug rule by reading how Claude Code names folders in `~/.claude/projects/` on the test machine.
 
@@ -268,7 +268,7 @@ _Auto-generated by claude-handoff on 2026-04-20. Edit freely; manual edits are p
 
 ## Recent Sessions
 
-### 2026-04-20 — Bob — Cleanup refactor
+### 2026-04-20 — Neo — Cleanup refactor
 
 - **Branch:** `refactor/auth-cleanup`
 - **Messages:** 47
@@ -360,7 +360,7 @@ Dependencies budget: keep runtime deps under 5 packages. This is a trust-sensiti
 ### Integration tests
 
 - Fixture: two fake session files with known paths and fake secrets
-- Round-trip: export from simulated Alice's env, import into simulated Bob's env, diff should show only path changes and redactions
+- Round-trip: export from simulated Alice's env, import into simulated Neo's env, diff should show only path changes and redactions
 
 ### Manual end-to-end
 
@@ -397,7 +397,7 @@ These are non-negotiable design constraints:
 1. Does `sessions-index.json` regenerate automatically when Claude Code starts, or do we need to write it ourselves on import?
 2. What happens if two people export overlapping session IDs? (Probably: namespace by author; if collision, keep both with disambiguating suffix.)
 3. Are session `.jsonl` files ever referenced by other files in `~/.claude/`? (If yes, those references might need updating too.)
-4. What's the right behavior when Alice exports, Bob imports, Bob continues the session, Bob exports? Do we overwrite Alice's version or keep both as a fork?
+4. What's the right behavior when Alice exports, Neo imports, Neo continues the session, Neo exports? Do we overwrite Alice's version or keep both as a fork?
 5. How big do these files get over a long project? If they're multi-MB, should we recommend git-lfs in the README?
 
 Answer these during implementation. Update this section with findings.
@@ -419,7 +419,7 @@ $ claude-handoff export
 ✓ Redacted 2 potential secrets (see .claude-handoff/redaction-log.json)
 $ git add .claude-shared/ && git commit -m "handoff" && git push
 
-# Bob's machine
+# Neo's machine
 $ git pull
 $ claude-handoff import
 ✓ Imported 3 sessions from Alice

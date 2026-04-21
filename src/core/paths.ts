@@ -20,9 +20,8 @@ export const HOME_PLACEHOLDER = '{{HOME}}';
  * Rule (empirically confirmed on Linux): every character that is not
  * ASCII alphanumeric and not a dash is replaced with a dash. Confirmed
  * examples:
- *   /home/neo/Dersler/NLP/Homework 3          → -home-neo-Dersler-NLP-Homework-3
- *   /home/neo/PythonProjects/YZV405E_2526_Hedgehogs
- *                                             → -home-neo-PythonProjects-YZV405E-2526-Hedgehogs
+ *   /home/alice/projects/Homework 3           → -home-alice-projects-Homework-3
+ *   /home/alice/projects/my_data_pipeline     → -home-alice-projects-my-data-pipeline
  *   /tmp/test.slug (v1)/project               → -tmp-test-slug--v1--project
  *
  * @deprecated For lookups, prefer `findSlugForPath`, which reverse-matches

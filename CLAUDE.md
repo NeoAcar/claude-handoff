@@ -65,7 +65,7 @@ macOS/Linux use a dash-separated slug; Windows likely differs. Do not ship Windo
 - Write tests alongside features, not after
 - Every function in `src/core/` has unit tests
 - Integration tests use fixture JSONL files in `test/fixtures/sessions/`
-- At least one end-to-end test simulates Alice → repo → Bob round-trip
+- At least one end-to-end test simulates Alice → repo → Neo round-trip
 - Before claiming a feature works: run it manually against a real `~/.claude/projects/` session and document the result in a PR comment
 
 ## Phase 0 Discipline
@@ -82,7 +82,7 @@ Before writing any tool code, produce `DISCOVERY.md` documenting:
 
 ## What "Done" Looks Like for the MVP
 
-Alice runs `claude-handoff export`, commits, pushes. Bob pulls, runs `claude-handoff import`, opens Claude Code, `/resume` shows Alice's sessions with their original summaries, and picking one actually restores context. If any step of that flow breaks, the MVP is not done.
+Alice runs `claude-handoff export`, commits, pushes. Neo pulls, runs `claude-handoff import`, opens Claude Code, `/resume` shows Alice's sessions with their original summaries, and picking one actually restores context. If any step of that flow breaks, the MVP is not done.
 
 ## Commit Messages
 

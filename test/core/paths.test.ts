@@ -27,7 +27,7 @@ const expected = JSON.parse(readFileSync(expectedPath, 'utf-8'));
 
 describe('computeSlug', () => {
   it('handles standard Linux path', () => {
-    expect(computeSlug('/home/bob/work/cool-project')).toBe('-home-bob-work-cool-project');
+    expect(computeSlug('/home/neo/work/cool-project')).toBe('-home-neo-work-cool-project');
   });
 
   it('handles macOS-style path', () => {
@@ -35,9 +35,7 @@ describe('computeSlug', () => {
   });
 
   it('replaces spaces with dashes (empirically confirmed)', () => {
-    expect(computeSlug('/home/neo/Dersler/NLP/Homework 3')).toBe(
-      '-home-neo-Dersler-NLP-Homework-3',
-    );
+    expect(computeSlug('/home/alice/projects/Homework 3')).toBe('-home-alice-projects-Homework-3');
   });
 
   it('handles short path', () => {
@@ -70,7 +68,7 @@ describe('computeSlug', () => {
 
   it('handles Windows-style path with backslashes', () => {
     // Backslashes normalize to /, and : (non-alnum) becomes dash.
-    expect(computeSlug('C:\\Users\\bob\\projectx')).toBe('C--Users-bob-projectx');
+    expect(computeSlug('C:\\Users\\neo\\projectx')).toBe('C--Users-neo-projectx');
   });
 
   it('replaces underscores with dashes (day-2 bug regression)', () => {
@@ -108,8 +106,8 @@ describe('findSlugForPath', () => {
     await mkdir(join(tmpHome, '.claude', 'projects'), { recursive: true });
     // Seed realistic slug directories
     const seeded = [
-      '-home-neo-PythonProjects-YZV405E-2526-Hedgehogs', // underscore path
-      '-home-neo-PythonProjects-FinanceAi',
+      '-home-alice-projects-course-2526-team', // underscore path
+      '-home-alice-projects-myapp',
       '-home-user-my-project', // came from /home/user/my_project OR /home/user/my.project etc.
       '-tmp-test-slug--v1--project',
     ];
@@ -127,13 +125,13 @@ describe('findSlugForPath', () => {
   });
 
   it('finds slug for path with underscores (day-2 bug regression)', async () => {
-    const result = await findSlugForPath('/home/neo/PythonProjects/YZV405E_2526_Hedgehogs');
-    expect(result).toBe('-home-neo-PythonProjects-YZV405E-2526-Hedgehogs');
+    const result = await findSlugForPath('/home/alice/projects/course_2526_team');
+    expect(result).toBe('-home-alice-projects-course-2526-team');
   });
 
   it('finds slug for straightforward path', async () => {
-    const result = await findSlugForPath('/home/neo/PythonProjects/FinanceAi');
-    expect(result).toBe('-home-neo-PythonProjects-FinanceAi');
+    const result = await findSlugForPath('/home/alice/projects/myapp');
+    expect(result).toBe('-home-alice-projects-myapp');
   });
 
   it('finds slug for path with parens and dots', async () => {
@@ -241,8 +239,8 @@ describe('localToPortable', () => {
 // --- Path rewriting: portable → local ---
 
 describe('portableToLocal', () => {
-  const root = '/home/bob/work/cool-project';
-  const home = '/home/bob';
+  const root = '/home/neo/work/cool-project';
+  const home = '/home/neo';
 
   it('rewrites PROJECT_ROOT placeholder', () => {
     expect(portableToLocal(PROJECT_ROOT_PLACEHOLDER, root, home)).toBe(root);
@@ -294,35 +292,35 @@ describe('portableToLocal', () => {
 describe('round-trip', () => {
   const aliceRoot = '/home/alice/projects/myapp';
   const aliceHome = '/home/alice';
-  const bobRoot = '/Users/bob/dev/myapp';
-  const bobHome = '/Users/bob';
+  const neoRoot = '/Users/neo/dev/myapp';
+  const neoHome = '/Users/neo';
 
   it('file path survives export then import', () => {
     const original = `${aliceRoot}/src/index.ts`;
     const portable = localToPortable(original, aliceRoot, aliceHome);
-    const imported = portableToLocal(portable, bobRoot, bobHome);
-    expect(imported).toBe(`${bobRoot}/src/index.ts`);
+    const imported = portableToLocal(portable, neoRoot, neoHome);
+    expect(imported).toBe(`${neoRoot}/src/index.ts`);
   });
 
   it('bash command survives round-trip', () => {
     const original = `cd "${aliceRoot}" && npm test`;
     const portable = localToPortable(original, aliceRoot, aliceHome);
-    const imported = portableToLocal(portable, bobRoot, bobHome);
-    expect(imported).toBe(`cd "${bobRoot}" && npm test`);
+    const imported = portableToLocal(portable, neoRoot, neoHome);
+    expect(imported).toBe(`cd "${neoRoot}" && npm test`);
   });
 
   it('mixed project + home paths survive round-trip', () => {
     const original = `${aliceRoot}/file.ts and ${aliceHome}/.bashrc`;
     const portable = localToPortable(original, aliceRoot, aliceHome);
-    const imported = portableToLocal(portable, bobRoot, bobHome);
-    expect(imported).toBe(`${bobRoot}/file.ts and ${bobHome}/.bashrc`);
+    const imported = portableToLocal(portable, neoRoot, neoHome);
+    expect(imported).toBe(`${neoRoot}/file.ts and ${neoHome}/.bashrc`);
   });
 
   it('home-only path survives round-trip', () => {
     const original = `${aliceHome}/.claude/settings.json`;
     const portable = localToPortable(original, aliceRoot, aliceHome);
-    const imported = portableToLocal(portable, bobRoot, bobHome);
-    expect(imported).toBe(`${bobHome}/.claude/settings.json`);
+    const imported = portableToLocal(portable, neoRoot, neoHome);
+    expect(imported).toBe(`${neoHome}/.claude/settings.json`);
   });
 });
 

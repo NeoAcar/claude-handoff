@@ -64,7 +64,7 @@ describe('extractSessionMeta', () => {
 
   it('extracts lastPrompt', async () => {
     const meta = await extractSessionMeta(sampleSession);
-    expect(meta.lastPrompt).toBe('bro you are best');
+    expect(meta.lastPrompt).toBe('thanks');
   });
 
   it('counts records', async () => {
