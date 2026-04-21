@@ -1,290 +1,179 @@
 # TODO
 
-## Phase 3 — Storage layer refactor (from Codex analysis of /tmp/codecli)
+Open work. Completed phases are listed at the bottom with the commit
+ranges that shipped them; git history has the details.
 
-A clean-room refactor informed by the reference implementation's
-storage resolution patterns. The current `src/core/paths.ts` conflates
-**placeholder rewriting** ("translate paths for portability") with
-**Claude store discovery** ("find the project dir on this machine").
-Those are two jobs; splitting them unlocks proper bundle export
-(subagents + session-memory) later.
+---
 
-Key insights from the reference that we should apply:
+## Open
 
-- **Canonicalize project roots** with `realpath()` + Unicode NFC before
-  matching against Claude Code's stored cwd. Handles symlinks + the
-  macOS NFD/NFC filename divergence.
-- **`sessionId` is the durable identity.** Filenames and project
-  directories are presentation, not identity.
-- **Sessions are bundles, not single files.** Main transcript lives at
-  `<store>/<sessionId>.jsonl`, sidecars at `<store>/<sessionId>/{subagents,remote-agents,session-memory}/...`.
-- **MEMORY.md is an index, not payload.** Memory scans exclude it; the
-  index is rebuilt from individual memory files.
-- **Auto-memory is keyed by canonical git root**, so worktrees share
-  one memory store.
+### High priority
 
-### Phase 3A — Storage layer split (foundation) ✅
+- [ ] **Redactor false positives beyond `url-with-creds`.**
+      Exporting from this repo still produces false positives from:
+      (a) synthetic secrets inside `test/core/redactor.test.ts`
+      fixtures, (b) markdown docs that use `password=xxx`-style
+      examples, (c) TypeScript literals like `type: 'aws-key'`. The
+      URL pattern was tightened in `05cf64a`, but the broader fix is
+      a context heuristic (skip inside test fixtures, markdown code
+      blocks tagged `example`, type-literal strings). Alternatively
+      / additionally: extend `.claude-handoff-ignore` to support
+      path globs so the user can say "skip scanning test/fixtures".
 
-Landed in `dcb9805` (store.ts additive) and the follow-up commit that
-shrinks paths.ts and rewires the commands. 117 tests pass (was 113).
-Smoke-tested on two real projects on disk.
+- [ ] **`inspect` command.** Safe read-only viewer for a shared
+      session. Pattern is already defined in
+      `.claude/commands/inspect-session.md`: print user / assistant
+      message counts, tool-use summary, redaction summary, first /
+      last timestamps — **never** print raw content. This is what
+      reviewers will want before pulling a PR that touches
+      `.claude-shared/`.
 
-- [x] `src/core/store.ts` with `canonicalizeProjectRoot`,
-      `getClaudeProjectsDir`, `sanitizeProjectKey`,
-      `findProjectStoreDir`, `getOrComputeStoreDir`,
-      `listProjectSessionFiles`, `resolveMainSessionFile`.
-- [x] `src/core/paths.ts` shrunk to placeholder rewriting only.
-- [x] `export.ts`, `import.ts`, `status.ts` use `store.ts`.
-- [x] 30 tests in `store.test.ts`; `paths.test.ts` trimmed to 38.
+### Medium priority
 
-### Phase 3B — Bundle manifest (session = main transcript + artifacts) ✅
+- [ ] **`.claude-handoff-memory-ignore` allow-list.** Memory export
+      is currently all-or-nothing (minus `MEMORY.md`). Teams that
+      want to share only select memory files need a filter. Format
+      mirrors `.claude-handoff-ignore`: one glob per line,
+      `#` comments.
 
-- [x] Manifest schema bumped to v2. `ManifestEntry` now carries an
-      `artifacts: BundleArtifact[]` array and richer metadata (title,
-      timestamps, source project root, malformed/recovered/skipped
-      counts). v1 manifests auto-migrate on load via `migrateV1`, so
-      older `.claude-shared/` folders keep working read-only.
-- [x] On-disk layout: directory-per-session
-      (`.claude-shared/sessions/<sessionId>/`) with `main.jsonl`,
-      `metadata.json`, and nested sidecar dirs. The old flat layout is
-      still readable on import via the v1 synthetic-entry path.
+- [ ] **Metadata-scrub for subagent meta sidecars.** The Codex pass
+      (`task-mo8qd79h-aa0vti`) enumerated fields in `writeAgentMetadata`
+      / `writeRemoteAgentMetadata` that are freeform text or
+      machine-specific: `worktreePath`, `description`, `title`,
+      `command`, `spawnedAt`, `sessionId`, `taskId`, `toolUseId`,
+      `remoteTaskMetadata.{owner,repo,prNumber}`. Our pipeline
+      already path-rewrites and redacts string values, but we don't
+      have an explicit scrub for wallclock timestamps or machine-
+      specific IDs. Decide whether to add one.
 
-### Phase 3C — Collect subagents and session-memory ✅
+- [ ] **message.id remapping.** Anthropic `msg_…` IDs currently
+      pass through unchanged. They're not path-bearing so nothing
+      breaks, but they're machine-tied. Decide: leave alone (current
+      behavior) or remap to a deterministic-per-session UUID so the
+      export is fully machine-neutral.
 
-- [x] `store.ts:collectSessionArtifacts(mainTranscriptPath)` walks the
-      session's sidecar directory and classifies subagent transcripts,
-      subagent meta sidecars, remote-agent transcripts, and
-      session-memory markdown.
-- [x] `export.ts` iterates artifacts, running the same path-rewrite + redaction pipeline per type (streaming for JSONL, buffered
-      deep-walk for JSON, buffered string transform for markdown).
-- [x] `import.ts` reconstructs the bundle dir under Neo's local
-      Claude store, mapping the main transcript to
-      `<store>/<sid>.jsonl` and sidecars to `<store>/<sid>/...`.
-- [x] Synthetic fixture under `test/fixtures/bundled/` with main
-      transcript + subagent + subagent meta + session-memory.
-- [x] Integration tests in `test/integration/bundle-roundtrip.test.ts`
-      covering full Alice→Neo round-trip with all four artifact kinds.
-      Validated against a real session on disk that has 8 subagent
-      sidecars (Hedgehogs project). 119 tests pass.
-- [ ] Docs: HOW_IT_WORKS.md "session bundle" subsection — follow-up.
+- [ ] **Verify `/resume` still works with `--strip-progress`.**
+      We exclude streaming progress records to shrink big sessions,
+      but haven't confirmed end-to-end that Claude Code's resume
+      picker and replay behave correctly on a stripped file. Manual
+      round-trip on a real session.
 
-### Phase 3D — Repo memory (explicit opt-in) ✅ (MVP)
+- [ ] **Session forking design.** Alice exports → Neo imports →
+      Neo continues → Neo exports. Today we skip or overwrite on
+      collision. Design a proper fork/merge strategy: keep both?
+      Namespace by author? First-write-wins with a warning?
 
-Informed by the second Codex pass (`task-mo8qd79h-aa0vti`): memory is
-keyed by canonical git root, MEMORY.md is LLM-maintained (excluded
-from the bundle), resume doesn't depend on memory being present, and
-session JSONL references memory files by absolute path (so we
-translate via `{{CLAUDE_STORE}}`).
+- [ ] **Worktree-aware enumeration (Phase 3E).** `store.ts:enumerateWorktreeRoots(projectRoot)`
+      via `git worktree list --porcelain`, then
+      `listProjectSessionFiles(projectRoot, { includeWorktrees: true })`
+      unions them. Gated behind `--include-worktrees` on
+      `export` / `status`.
 
-- [x] `--memory` flag on export (off by default)
-- [x] Walks `<store-via-git-root>/memory/*` recursively, excluding
-      `MEMORY.md`
-- [x] `{{CLAUDE_STORE}}` placeholder round-trips cross-machine
-      references (Alice's key → Neo's key) inside both memory files
-      and session JSONL
-- [x] On import, writes to the recipient's canonical-git-root-keyed
-      memory dir; skip-by-default on collision, `--overwrite` replaces
-- [x] Integration test covers the Alice→Neo memory round-trip with a
-      real git repo on each side
+### Low priority
 
-Open follow-ups:
+- [ ] **`--dry-run` on import.** Symmetry with export. Low demand
+      so far; no one has asked.
 
-- [ ] `.claude-handoff-memory-ignore` allow-list for teams that want
-      to share only select memory files (today it's all-or-nothing
-      inside memory/, minus MEMORY.md)
-- [ ] thinking.signature strip is per-record; same approach could
-      apply to subagent meta sidecar fields the Codex pass flagged
-      (`worktreePath`, `description`, `title`, `command`, timestamps)
-      — decide whether we want a metadata-scrub pass there too
+- [ ] **Interactive picker for export.** Checkbox UI for selecting
+      sessions. Nice-to-have; no real pain point yet.
 
-### Phase 3E — Worktree-aware discovery (polish)
+- [ ] **HANDOFF.md generator.** Auto-generate a human-readable
+      summary with `<!-- MANUAL -->` sections preserved across
+      regenerations. Deferred because current session titles
+      already make the picker useful enough.
 
-- [ ] `store.ts:enumerateWorktreeRoots(projectRoot): Promise<string[]>`
-      via `git worktree list --porcelain`
-- [ ] `listProjectSessionFiles(projectRoot, { includeWorktrees: true })`
-      unions sessions from all worktrees
-- [ ] Gated behind a flag initially (`--include-worktrees` on
-      `export`/`status`)
+- [ ] **npm publish.** Current install is clone + `npm link`.
+      Blocker on non-technical collaborators adopting the tool.
 
-### What we deliberately skip from the reference
+- [ ] **Redaction via `detect-secrets` or `gitleaks`.** Optional
+      shell-out for broader pattern coverage. Adds a dependency, so
+      gate behind a flag.
+
+### Out of scope for now
+
+- [ ] Git hooks (auto-export on commit, auto-import on pull).
+- [ ] `claude-handoff doctor` cross-machine diagnostic.
+- [ ] Windows support — needs a test machine.
+- [ ] Long-path hash tolerance — the reference hashes paths that
+      exceed some threshold instead of sluggifying. We don't know
+      the threshold or hash function yet. Revisit if a user hits it.
+
+### What we deliberately skip from the reference codebase
 
 - `Project` write-queue, tail-window metadata re-append — live-CLI
-  concerns.
+  concerns, not relevant to offline file packaging.
 - `permissions/filesystem.ts` carve-outs — not our job.
 - Background `extractMemories` service — requires an LLM call.
 - `teamMemorySync` — out of scope for a git-based tool.
 
-### Open questions (may need another Codex pass)
+---
 
-- Long-path hash tolerance: what's the hash function and threshold
-  when Claude Code hashes instead of sluggifying? MVP punts; if a
-  user hits this we revisit.
-- `agent-*.meta.json` sidecar files — do they contain paths or just
-  metadata? Affects whether we need to rewrite them on export.
+## Completed
 
-## Phase 2 — Ready to Start
+### Phase 0–1 — Discovery and MVP
 
-### Features
+End-to-end `export → git → import` with streaming JSONL, path
+rewriting, secret redaction, manifest, and `status` / `list`
+commands. Details in `PROGRESS.md`.
 
-- **memory/ folder support** — Export and import `~/.claude/projects/<slug>/memory/` alongside sessions. Memory files are portable markdown with no absolute paths, so minimal transformation needed.
-- **HANDOFF.md generator** — Auto-generate human-readable session summary from JSONL metadata. Preserve `<!-- MANUAL -->` sections across regenerations.
-- ~~**Session filtering flags** — Implement `--since <date>` filter on export.~~ ✅ done
-- **Interactive picker** — Checkbox UI for selecting which sessions to export (instead of all-or-nothing).
-- **Subagent transcript export** — Include `<uuid>/subagents/*.jsonl` files in the export pipeline.
+### Phase 2.0 — Day-2 bug fixes
 
-### Configurability
+- Silent slug mismatch on paths with underscores / parens / dots —
+  `computeSlug` corrected; lookups switched to reverse-match
+  (`6393c59`).
+- Parser crashes on malformed JSONL — recovery via `}{` split with
+  warn-and-continue fallback (`a89a75e`).
+- Repo anonymization + Bob→Neo rename for open-source release
+  (`be1465b`).
 
-- ~~**.claude-handoff-ignore support**~~ ✅ done — project-root file, one regex per line, merged into the redaction pipeline.
-- ~~**Progress record stripping**~~ ✅ done via `--strip-progress`. Still to verify: `/resume` works without these records (manual test).
+### Phase 2.1 — Real-world dogfooding polish
 
-### Investigations
+- No-arg CLI runs `status` (`b37952b`).
+- `url-with-creds` regex tightened to true `user:pass@host` forms
+  (`05cf64a`).
+- Redaction reporting shows unique vs total markers with
+  per-pattern breakdown; log grouped by pattern (`b82fca9`).
+- `status` shows size, age, and a `*` marker for sessions modified
+  since last export (`099657a`).
+- `import` reports imported / overwritten / skipped separately;
+  README documents the skip-by-default-then-`--overwrite` policy
+  (`a9f1d8a`).
+- `list` gains size + `--verbose` with manifest-aware details
+  (`7033752`).
+- `export --since <iso-date>`, `--strip-progress`,
+  `.claude-handoff-ignore` custom redaction patterns (`cbc0ea8`).
 
-- **thinking.signature field** — Do thinking signatures validate across machines? The `thinking.signature` field is an Anthropic-internal cryptographic value (not a user secret), but if exported sessions reproduce these in shared contexts, verify whether they're machine/account-tied. Test during a real cross-machine round-trip.
-- **message.id field** — Fields like `msg_018vP5DYx5EAuAmzny5SbcLH` were not remapped during export. Likely fine but inconsistent with path-neutrality goals. Decide whether to remap these for full machine-neutrality.
-- **Session forking** — What happens when Alice exports, Neo imports, Neo continues, Neo exports? Design the merge/fork strategy (keep both? overwrite? namespace by author?).
+### Phase 3 — Storage layer refactor + bundle model
 
-### Polish
+Informed by Codex analysis of the reference repo at `/tmp/codecli`
+(`task-mo8njiyj-g4cpk6` for the storage patterns,
+`task-mo8qd79h-aa0vti` for memory / meta sidecars /
+`thinking.signature` semantics).
 
-- **Redaction improvements** — Consider shelling out to `detect-secrets` or `gitleaks` for more comprehensive coverage.
-- **git hooks (opt-in)** — `claude-handoff install-hooks` for post-commit auto-export, post-merge auto-import.
-- **`claude-handoff doctor`** — Cross-machine path diagnosis command.
-- **Windows support** — Verify slug computation and path rewriting on Windows (drive letters, backslashes).
+- **3A — storage layer split.** New `src/core/store.ts` owns Claude
+  store discovery (canonical project root via `realpath` + NFC,
+  fast-path key lookup, `cwd`-peek fallback, sessionId resolution).
+  `paths.ts` shrunk to placeholder rewriting only. Commits
+  `dcb9805`, `5ced4b5`.
+- **3B + 3C — bundle model.** Sessions exported as directory
+  bundles under `.claude-shared/sessions/<sessionId>/` with
+  `main.jsonl`, `metadata.json`, and `subagents/`,
+  `remote-agents/`, `session-memory/` sidecars. Manifest schema v2
+  with auto-migration from v1 flat-file exports. Commit `9385d3c`.
+- **3C.5 — signed-thinking-block strip.** `thinking.signature`
+  fields are API-key + model bound; resume itself doesn't validate
+  them but the next API turn 400s on mismatch. Default strip on
+  export (matches the reference mitigation); `--keep-signatures`
+  opts back in. Commit `30e402f`.
+- **`{{CLAUDE_STORE}}` placeholder.** Third portable placeholder
+  alongside `{{PROJECT_ROOT}}` / `{{HOME}}`. Translates absolute
+  paths that point inside the machine-specific `~/.claude/projects/<key>/`
+  so Alice's key gets rewritten to Neo's on import. Commit
+  `d96a8fd`.
+- **3D — repo memory (opt-in).** `--memory` flag walks
+  `<store-via-canonical-git-root>/memory/*` excluding `MEMORY.md`
+  (LLM-maintained; Claude Code rebuilds it). Worktrees share one
+  memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-## Bugs from real-world use (day 1)
-
-- [ ] Parser crashes on malformed JSONL in real sessions. Example:
-      a real session's line 350 appears to be two JSON records
-      concatenated without a newline separator (length 2051, jq
-      fails at column 135 with "invalid numeric literal").
-      Root cause likely in Claude Code itself, not our tool.
-      Fix required in src/core/session.ts — streamRecords should: - Catch parse errors per line - Attempt recovery (e.g., split on `}{` boundaries as a fallback) - Log warning, skip the line, continue processing - Report count of skipped lines in export summary
-      Add a fixture with a corrupted/concatenated line for regression testing.
-
-## Bugs from real-world use (day 2)
-
-- [ ] **SILENT BUG — slug computation is incomplete.** `computeSlug` in
-      src/core/paths.ts only replaces `/` and space with `-`. But Claude
-      Code's real rule is broader: any non-alphanumeric non-dash character
-      becomes `-`. Confirmed empirically by creating `/tmp/test.slug (v1)/project`
-      and observing Claude Code produced slug `-tmp-test-slug--v1--project`.
-
-      Real example that caused a false "no sessions" report:
-        Path: /home/alice/projects/course_2526_team
-        Claude Code slug: -home-alice-projects-course-2526-team (underscores → dashes)
-        Our computed slug: -home-alice-projects-course_2526_team (underscores kept)
-        Result: claude-handoff status reported "(none)" while real sessions existed.
-
-      **Preferred fix: switch to reverse-matching instead of computing slugs.**
-      List directories under ~/.claude/projects/, find the one that corresponds
-      to the current cwd. This is robust to future changes in Claude Code's
-      slug rule and to characters we haven't tested (Unicode, Turkish chars).
-
-      Keep `computeSlug` as a fallback/informational utility, but don't rely
-      on it for lookups. Update all callers in src/commands/*.ts.
-
-      Regression test: add fixture with a project path containing underscores,
-      dots, parentheses, and a Turkish character. Verify reverse-match finds it.
-
-## What we learned from day-2 real-world testing
-
-- Tool worked fine on a clean project (574 records, title extracted)
-- Tool crashed on a project with a corrupted session line (day-1 bug)
-- Tool silently failed on a project with underscores in its path (day-2 bug)
-- Speculative Phase 2 features (HANDOFF.md generator, interactive picker,
-  --last N filter, memory support, .claude-handoff-ignore, thinking
-  signature investigation) were NOT observed as actual pain points during
-  real use. Park them until more real usage generates real signal.
-
-## Phase 2.1 — Real-world usage signals (day 2, after demo handoff test)
-
-Gathered from two real-world export tests:
-
-- `claude-handoff` repo itself (2 sessions, 700+ records, heavy self-referential content)
-- `handoff-demo` toy project (1 session, 40 records, clean case)
-
-### High priority
-
-- [ ] **Redactor false positives flood real projects.** Exporting from the
-      tool's own repo produced 122 redaction markers across 13 pattern types.
-      The overwhelming majority are false positives: synthetic secrets inside
-      `redactor.test.ts` fixtures, markdown documentation tables in SPEC.md
-      (e.g., `password=xxx` examples), and TypeScript type literals like
-      `type: 'aws-key'`. Real projects that contain auth/crypto code will
-      have the same problem — code samples and docstrings get mangled.
-
-      Fix direction:
-      - Add a context heuristic: detect when a match is inside a test fixture,
-        a markdown code block tagged `example`, or a type literal
-      - Support a `.claude-handoff-ignore` file with user-defined patterns to
-        skip or allowlist
-      - ~~Tune the `url-with-creds` regex~~ ✅ done in 05cf64a — restricted
-        to true `user:pass@host` forms so ordinary URLs are no longer matched.
-
-- [ ] **Memory folder support.** `~/.claude/projects/<slug>/memory/` was
-      discovered in Phase 0 but deferred. In the day-2 demo handoff test,
-      Claude Code itself tried to create/delete memory files during a
-      handed-off session, suggesting both Claude Code and future users
-      expect this folder to travel with the session. Export and import
-      should now cover `memory/*.md` with the same path rewriting and
-      redaction treatment as sessions.
-
-### Medium priority
-
-- [x] **Redaction reporting is confusing.** Summary now shows both unique
-      secrets and total markers, plus a per-pattern breakdown. The log
-      (`.claude-handoff/redaction-log.json`) groups hits by pattern with
-      dedup'd contexts.
-
-- [ ] **`inspect` command for shared sessions.** Opening a `.jsonl` file
-      from `.claude-shared/sessions/` with `cat` is unreadable — pure JSON
-      blobs. Users and reviewers need a safe way to peek at a shared
-      session before pulling or pushing. Build `claude-handoff inspect
-<session-id>` that prints: user message count, assistant response
-      count, tool_use summary, redaction summary, first/last timestamps.
-      Never print raw content. Same philosophy as `.claude/commands/
-inspect-session.md`.
-
-- [x] **Conflict behavior on import.** Default is skip-with-warning;
-      `--overwrite` replaces. Summary now separately reports imported /
-      overwritten / skipped counts. Documented in README.
-
-### Low priority
-
-- [ ] **HANDOFF.md auto-generator.** Deferred from Phase 2 of SPEC. Current
-      session titles (e.g., "Actually let me stop here. Next person will
-      add JSON output support.") are already surprisingly good as a handoff
-      signal in the demo test — so this is less urgent than assumed. Revisit
-      after more real team use; maybe we don't even need it.
-
-- [x] **Reporting polish for status/list.** `status` shows size, age, and
-      a `*` marker for sessions modified since the last export. `list` now
-      shows size and supports `--verbose` (author, export time, redaction
-      markers, timespan).
-
-- [x] **No-arg CLI behavior.** Running `claude-handoff` alone now runs
-      `status` by default and hints at next steps.
-
-- [ ] **Distribution friction.** Tool is not on npm yet. Installing it
-      requires clone + `npm link`, which is a significant barrier for
-      non-technical collaborators. Before widespread sharing, publish
-      to npm so the install step is one line.
-
-### Phase 2.1 bugs to fix before next dogfooding round
-
-- [ ] **thinking.signature field** (flagged in day-1 TODO) — still not
-      investigated. If signatures are machine/account-tied, they will
-      fail validation on a different user's machine. Test on a real
-      cross-user handoff. Might be invisible (signature ignored) or
-      might silently corrupt thinking blocks — unknown.
-
-- [ ] **message.id remapping** (flagged in day-1 TODO) — inconsistent with
-      our UUID-remap policy. Decide whether to leave as-is or remap for
-      full machine-neutrality.
-
-### Out of scope for Phase 2.1 (revisit later)
-
-- [ ] Git hooks (auto-export on commit, auto-import on pull) — Phase 3
-- [ ] `claude-handoff doctor` cross-machine diagnostic — Phase 3
-- [ ] Windows support — Phase 4, after distribution strategy is clear
-- [ ] Interactive picker for export — nice-to-have, no real pain point yet
-- [ ] `--dry-run` on import — symmetry with export; low demand so far
+**Current test count:** 133 across 7 suites, including two
+integration suites (`bundle-roundtrip`, `memory-roundtrip`).
