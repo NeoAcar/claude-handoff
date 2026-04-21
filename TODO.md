@@ -95,9 +95,8 @@ Gathered from two real-world export tests:
         a markdown code block tagged `example`, or a type literal
       - Support a `.claude-handoff-ignore` file with user-defined patterns to
         skip or allowlist
-      - Tune the `url-with-creds` regex — currently catches normal URLs
-        (e.g., `npm notice Changelog: https://...`). Restrict to actual
-        `user:pass@host` forms: `://[^:/@\s]+:[^@\s]+@`
+      - ~~Tune the `url-with-creds` regex~~ ✅ done in 05cf64a — restricted
+        to true `user:pass@host` forms so ordinary URLs are no longer matched.
 
 - [ ] **Memory folder support.** `~/.claude/projects/<slug>/memory/` was
       discovered in Phase 0 but deferred. In the day-2 demo handoff test,
