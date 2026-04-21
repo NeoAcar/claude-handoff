@@ -42,9 +42,9 @@ Key insights from the reference that we should apply:
     — single-project lookup; cross-project scan when `projectRoot`
     omitted
 - [ ] Shrink `src/core/paths.ts` to placeholder rewriting only. Remove
-  `computeSlug`, `findSlugForPath`, `getClaudeProjectsDir`,
-  `getProjectSlugDir`. Keep `localToPortable`, `portableToLocal`,
-  `deepRewrite`, placeholder constants, boundary-safe internals.
+      `computeSlug`, `findSlugForPath`, `getClaudeProjectsDir`,
+      `getProjectSlugDir`. Keep `localToPortable`, `portableToLocal`,
+      `deepRewrite`, placeholder constants, boundary-safe internals.
 - [ ] Rewire commands to use `store.ts`:
   - `export.ts`: `findProjectStoreDir` + `listProjectSessionFiles`
   - `import.ts`: `getOrComputeStoreDir`
@@ -82,13 +82,13 @@ Key insights from the reference that we should apply:
   - Look for `<store>/<sessionId>/remote-agents/*.jsonl`
   - Look for `<store>/<sessionId>/session-memory/summary.md`
 - [ ] `export.ts` iterates artifacts, applies the same
-  path-rewrite + redaction pipeline per file type:
+      path-rewrite + redaction pipeline per file type:
   - `.jsonl` → streaming transform (existing code)
   - `.md`, `.json` → buffered read, redact + path-rewrite, write
 - [ ] `import.ts` reconstructs the bundle dir under the user's local
-  Claude store
+      Claude store
 - [ ] Fixture: synthetic session with a subagent + session-memory
-  sidecar, round-trip test in `scripts/roundtrip-test.sh`
+      sidecar, round-trip test in `scripts/roundtrip-test.sh`
 - [ ] Docs: HOW_IT_WORKS.md gets a "session bundle" subsection
 
 ### Phase 3D — Repo memory (explicit opt-in)
@@ -99,21 +99,21 @@ without intent.
 
 - [ ] `--memory` flag on export (off by default)
 - [ ] When set, export `<store>/memory/*.md` except `MEMORY.md` (it's
-  an index — rebuild on import)
+      an index — rebuild on import)
 - [ ] Add `.claude-handoff-memory-ignore` or similar allow-list so
-  teams can share only the memory files they mean to
+      teams can share only the memory files they mean to
 - [ ] On import, merge into local memory dir. On file-name collision:
-  default skip, `--overwrite` replaces, future `--merge` strategy TBD
+      default skip, `--overwrite` replaces, future `--merge` strategy TBD
 - [ ] Regenerate `MEMORY.md` from present files on import
 
 ### Phase 3E — Worktree-aware discovery (polish)
 
 - [ ] `store.ts:enumerateWorktreeRoots(projectRoot): Promise<string[]>`
-  via `git worktree list --porcelain`
+      via `git worktree list --porcelain`
 - [ ] `listProjectSessionFiles(projectRoot, { includeWorktrees: true })`
-  unions sessions from all worktrees
+      unions sessions from all worktrees
 - [ ] Gated behind a flag initially (`--include-worktrees` on
-  `export`/`status`)
+      `export`/`status`)
 
 ### What we deliberately skip from the reference
 
