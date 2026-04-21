@@ -178,16 +178,18 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   manifest.lastExportAt = new Date().toISOString();
   await writeManifest(sharedDir, manifest);
 
-  // Write redaction log (local only)
+  // Write redaction log (local only), grouped by pattern for easier review.
   if (result.allHits.length > 0) {
     const logPath = path.join(localDir, 'redaction-log.json');
+    const byPattern = groupHits(result.allHits);
     await writeFile(
       logPath,
       JSON.stringify(
         {
           exportedAt: new Date().toISOString(),
-          totalHits: result.allHits.length,
-          hits: result.allHits,
+          uniqueSecrets: countUniqueHits(result.allHits),
+          totalMarkers: result.allHits.length,
+          byPattern,
         },
         null,
         2,
@@ -199,7 +201,16 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   // Summary
   console.log(`\nExported ${result.exported.length} session(s) to .claude-shared/`);
   if (result.totalRedactionHits > 0) {
-    console.log(`Redacted: ${result.totalRedactionHits} potential secret(s)`);
+    const uniqueCount = countUniqueHits(result.allHits);
+    const byPattern = groupByPattern(result.allHits);
+    console.log(
+      `Redacted: ${uniqueCount} unique secret(s), ${result.totalRedactionHits} marker(s) written across fields`,
+    );
+    const breakdown = Object.entries(byPattern)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => `${name}=${count}`)
+      .join(', ');
+    console.log(`  by pattern: ${breakdown}`);
     console.log(`Review: .claude-handoff/redaction-log.json`);
   }
   if (result.totalMalformed > 0) {
@@ -209,6 +220,52 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     );
   }
   console.log('Before committing, run: git diff .claude-shared/');
+}
+
+/**
+ * Count distinct (pattern, context) pairs. The same secret serialized in
+ * multiple JSONL fields produces one marker per field but counts as one
+ * unique secret — this number is what a human reviewer actually cares about.
+ */
+function countUniqueHits(hits: RedactionHit[]): number {
+  const seen = new Set<string>();
+  for (const h of hits) {
+    seen.add(`${h.pattern}\0${h.context}`);
+  }
+  return seen.size;
+}
+
+function groupByPattern(hits: RedactionHit[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const h of hits) {
+    counts[h.pattern] = (counts[h.pattern] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Group hits by pattern and deduplicate contexts within each group, so the
+ * log reads as: pattern → list of distinct matches → occurrence count.
+ */
+function groupHits(
+  hits: RedactionHit[],
+): Record<string, { unique: number; markers: number; contexts: string[] }> {
+  const groups: Record<string, { contexts: Map<string, number> }> = {};
+  for (const h of hits) {
+    const g = (groups[h.pattern] ??= { contexts: new Map() });
+    g.contexts.set(h.context, (g.contexts.get(h.context) ?? 0) + 1);
+  }
+  const out: Record<string, { unique: number; markers: number; contexts: string[] }> = {};
+  for (const [pattern, g] of Object.entries(groups)) {
+    let markers = 0;
+    for (const n of g.contexts.values()) markers += n;
+    out[pattern] = {
+      unique: g.contexts.size,
+      markers,
+      contexts: Array.from(g.contexts.keys()),
+    };
+  }
+  return out;
 }
 
 async function getGitUserName(): Promise<string | undefined> {
