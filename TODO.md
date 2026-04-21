@@ -6,14 +6,14 @@
 
 - **memory/ folder support** — Export and import `~/.claude/projects/<slug>/memory/` alongside sessions. Memory files are portable markdown with no absolute paths, so minimal transformation needed.
 - **HANDOFF.md generator** — Auto-generate human-readable session summary from JSONL metadata. Preserve `<!-- MANUAL -->` sections across regenerations.
-- **Session filtering flags** — Implement `--since <date>` filter on export.
+- ~~**Session filtering flags** — Implement `--since <date>` filter on export.~~ ✅ done
 - **Interactive picker** — Checkbox UI for selecting which sessions to export (instead of all-or-nothing).
 - **Subagent transcript export** — Include `<uuid>/subagents/*.jsonl` files in the export pipeline.
 
 ### Configurability
 
-- **.claude-handoff-ignore support** — Allow users to specify files/patterns to exclude from export (beyond the built-in redaction patterns).
-- **Progress record stripping** — Option to exclude `progress` type records on export (they're ~54% of records by count but not needed for context restoration). Test that `/resume` still works without them.
+- ~~**.claude-handoff-ignore support**~~ ✅ done — project-root file, one regex per line, merged into the redaction pipeline.
+- ~~**Progress record stripping**~~ ✅ done via `--strip-progress`. Still to verify: `/resume` works without these records (manual test).
 
 ### Investigations
 
@@ -134,10 +134,10 @@ inspect-session.md`.
       signal in the demo test — so this is less urgent than assumed. Revisit
       after more real team use; maybe we don't even need it.
 
-- [x] **Reporting polish for status.** `status` now shows size and
-      human-readable age per session, plus a `*` marker for local sessions
-      modified since the last export. `list` polish + `--verbose` still
-      open.
+- [x] **Reporting polish for status/list.** `status` shows size, age, and
+      a `*` marker for sessions modified since the last export. `list` now
+      shows size and supports `--verbose` (author, export time, redaction
+      markers, timespan).
 
 - [x] **No-arg CLI behavior.** Running `claude-handoff` alone now runs
       `status` by default and hints at next steps.
