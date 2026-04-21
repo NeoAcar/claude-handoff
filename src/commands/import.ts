@@ -19,7 +19,7 @@
  * reconstructed correctly.
  */
 
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
@@ -103,15 +103,57 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     const sessionId = entry.sessionId;
     const localMainPath = path.join(slugDir, `${sessionId}.jsonl`);
 
+    // Iteration-aware conflict handling. When both sides know the
+    // session's source mtime (via entry.sourceMtimeMs, introduced in
+    // 0.2.0), we can distinguish in-sync from catch-up from
+    // local-ahead without making the user reason about it:
+    //
+    //   local missing           → import (fresh case, same as before)
+    //   local.mtime == bundle   → in sync, skip (nothing to catch up)
+    //   local.mtime  < bundle   → bundle is ahead, auto-catch-up
+    //   local.mtime  > bundle   → local is ahead (user worked after
+    //                              previous import), skip unless
+    //                              --overwrite, warn that local
+    //                              changes would be lost
+    //
+    // Legacy entries (no sourceMtimeMs) fall back to the previous
+    // "skip unless --overwrite" rule so older bundles still import.
     const mainExists = await pathExists(localMainPath);
-    if (mainExists && !options.overwrite) {
-      console.log(
-        `  Skipping ${sessionId} (already exists locally — rerun with --overwrite to replace)`,
-      );
-      skippedCount++;
-      continue;
+    let overwritingThisEntry = false;
+    if (mainExists) {
+      if (entry.sourceMtimeMs === undefined) {
+        // Legacy entry — can't compare mtimes. Old rule.
+        if (!options.overwrite) {
+          console.log(
+            `  Skipping ${sessionId} (legacy entry, already exists locally — rerun with --overwrite to replace)`,
+          );
+          skippedCount++;
+          continue;
+        }
+        overwritingThisEntry = true;
+      } else {
+        const localStat = await stat(localMainPath);
+        const localMs = localStat.mtimeMs;
+        const bundleMs = entry.sourceMtimeMs;
+        if (localMs === bundleMs) {
+          console.log(`  Skipping ${sessionId} (in sync with bundle)`);
+          skippedCount++;
+          continue;
+        }
+        if (localMs > bundleMs && !options.overwrite) {
+          console.log(
+            `  Skipping ${sessionId} (local copy has unshared work — rerun with --overwrite to discard it and take the bundle)`,
+          );
+          skippedCount++;
+          continue;
+        }
+        if (localMs > bundleMs && options.overwrite) {
+          overwritingThisEntry = true;
+        }
+        // localMs < bundleMs: catch-up, proceed without --overwrite
+      }
     }
-    if (mainExists && options.overwrite) {
+    if (overwritingThisEntry) {
       overwrittenCount++;
     }
 
@@ -151,6 +193,16 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
 
       importedArtifacts++;
       if (artifact.kind !== 'transcript') sidecarCount++;
+    }
+
+    // Pin the local transcript's mtime back to the source mtime
+    // recorded in the manifest, so a subsequent export sees a stable
+    // "in sync" signal rather than flagging the import itself as a
+    // local change. Sidecars we leave alone — they're not used for
+    // iteration checks.
+    if (entry.sourceMtimeMs !== undefined && (await pathExists(localMainPath))) {
+      const mtimeDate = new Date(entry.sourceMtimeMs);
+      await utimes(localMainPath, mtimeDate, mtimeDate);
     }
 
     const title = entry.title ?? '(untitled)';
