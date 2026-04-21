@@ -94,7 +94,10 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   let skippedCount = 0;
   let overwrittenCount = 0;
 
-  const rewriteString = (s: string) => portableToLocal(s, projectRoot, localHome);
+  // Pass the destination store dir into the rewriter so any
+  // {{CLAUDE_STORE}} placeholders in the exported JSONL land on Neo's
+  // local Claude store path rather than Alice's.
+  const rewriteString = (s: string) => portableToLocal(s, projectRoot, localHome, slugDir);
 
   for (const entry of entries) {
     const sessionId = entry.sessionId;

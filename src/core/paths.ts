@@ -9,21 +9,43 @@
 
 export const PROJECT_ROOT_PLACEHOLDER = '{{PROJECT_ROOT}}';
 export const HOME_PLACEHOLDER = '{{HOME}}';
+/**
+ * Absolute path of the project's Claude store directory
+ * (`~/.claude/projects/<key>/`). Session JSONL records sometimes carry
+ * absolute paths that point inside this directory — memory file edits,
+ * `system.memory_saved` records, subagent meta sidecars referencing
+ * `worktreePath`. The store key is derived from the machine's
+ * canonicalized project root (or git root, for auto-memory), so it
+ * differs between Alice and Neo. Without this placeholder, rewriting
+ * just `{{HOME}}` would leave Alice's key baked in — references
+ * would land on a non-existent path after import.
+ */
+export const CLAUDE_STORE_PLACEHOLDER = '{{CLAUDE_STORE}}';
 
 // --- Path rewriting ---
 
 /**
  * Replace local absolute paths with portable placeholders (export direction).
  *
- * Replacement order matters: project root first (longer, more specific),
- * then home directory. This prevents partial matches — if the project is
- * inside HOME, the project root match takes priority.
+ * Replacement order matters — longest / most specific first:
+ *   1. The Claude store directory, if given. Typically a subpath of HOME,
+ *      so it must run before the HOME pass.
+ *   2. The project root, which itself often sits inside HOME.
+ *   3. HOME.
  *
  * Only replaces at path-component boundaries to avoid substring disasters
  * (e.g., a project named "auth" must not rewrite the word "auth" in code).
  */
-export function localToPortable(text: string, localRoot: string, localHome: string): string {
+export function localToPortable(
+  text: string,
+  localRoot: string,
+  localHome: string,
+  localStoreDir?: string,
+): string {
   let result = text;
+  if (localStoreDir) {
+    result = replacePathPrefix(result, localStoreDir, CLAUDE_STORE_PLACEHOLDER);
+  }
   result = replacePathPrefix(result, localRoot, PROJECT_ROOT_PLACEHOLDER);
   result = replacePathPrefix(result, localHome, HOME_PLACEHOLDER);
   return result;
@@ -32,12 +54,22 @@ export function localToPortable(text: string, localRoot: string, localHome: stri
 /**
  * Replace portable placeholders with local absolute paths (import direction).
  *
- * Replacement order matters: project root first, then home.
+ * Placeholders don't overlap, so ordering is cosmetic here — we still do
+ * `{{PROJECT_ROOT}}` → HOME → `{{CLAUDE_STORE}}` so the reverse reads
+ * symmetrically with the export pass.
  */
-export function portableToLocal(text: string, localRoot: string, localHome: string): string {
+export function portableToLocal(
+  text: string,
+  localRoot: string,
+  localHome: string,
+  localStoreDir?: string,
+): string {
   let result = text;
   result = replacePathPrefix(result, PROJECT_ROOT_PLACEHOLDER, localRoot);
   result = replacePathPrefix(result, HOME_PLACEHOLDER, localHome);
+  if (localStoreDir) {
+    result = replacePathPrefix(result, CLAUDE_STORE_PLACEHOLDER, localStoreDir);
+  }
   return result;
 }
 

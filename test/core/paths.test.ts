@@ -5,6 +5,7 @@ import {
   deepRewrite,
   PROJECT_ROOT_PLACEHOLDER,
   HOME_PLACEHOLDER,
+  CLAUDE_STORE_PLACEHOLDER,
 } from '../../src/core/paths.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -158,6 +159,56 @@ describe('portableToLocal', () => {
   it('fixture: cwd field', () => {
     const exp = expected.import.sample_records.line_2_user_cwd;
     expect(portableToLocal(PROJECT_ROOT_PLACEHOLDER, root, home)).toBe(exp.cwd);
+  });
+});
+
+// --- Claude store placeholder ---
+
+describe('CLAUDE_STORE placeholder', () => {
+  const root = '/home/alice/projects/myapp';
+  const home = '/home/alice';
+  const store = '/home/alice/.claude/projects/-home-alice-projects-myapp';
+
+  it('rewrites a path inside the store dir ahead of the HOME rewrite', () => {
+    const text = `${store}/memory/foo.md`;
+    expect(localToPortable(text, root, home, store)).toBe(
+      `${CLAUDE_STORE_PLACEHOLDER}/memory/foo.md`,
+    );
+  });
+
+  it('still rewrites HOME when the path is outside the store', () => {
+    const text = `${home}/.bashrc`;
+    expect(localToPortable(text, root, home, store)).toBe(`${HOME_PLACEHOLDER}/.bashrc`);
+  });
+
+  it('still rewrites PROJECT_ROOT when the path is under the project', () => {
+    const text = `${root}/README.md`;
+    expect(localToPortable(text, root, home, store)).toBe(`${PROJECT_ROOT_PLACEHOLDER}/README.md`);
+  });
+
+  it('survives a round-trip with a different receiver key', () => {
+    const aliceStore = '/home/alice/.claude/projects/-home-alice-projects-myapp';
+    const neoStore = '/home/neo/.claude/projects/-home-neo-projects-myapp';
+    const neoRoot = '/home/neo/projects/myapp';
+    const neoHome = '/home/neo';
+
+    const original = `${aliceStore}/memory/convention.md`;
+    const portable = localToPortable(original, root, home, aliceStore);
+    expect(portable).toBe(`${CLAUDE_STORE_PLACEHOLDER}/memory/convention.md`);
+
+    const imported = portableToLocal(portable, neoRoot, neoHome, neoStore);
+    expect(imported).toBe(`${neoStore}/memory/convention.md`);
+  });
+
+  it('no-ops when no store dir is provided', () => {
+    const text = `${store}/memory/foo.md`;
+    // Without the store arg, HOME rewrite still catches the prefix but
+    // the Alice-specific key stays. This is the "broken" case the
+    // placeholder exists to fix — documented here so the contract is
+    // explicit.
+    expect(localToPortable(text, root, home)).toBe(
+      `${HOME_PLACEHOLDER}/.claude/projects/-home-alice-projects-myapp/memory/foo.md`,
+    );
   });
 });
 

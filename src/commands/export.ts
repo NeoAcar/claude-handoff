@@ -168,7 +168,12 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     totalSkipped: 0,
   };
 
-  const rewriteString = (s: string) => localToPortable(s, projectRoot, localHome);
+  // Pass the resolved store dir into the rewriter so session JSONL
+  // references that point into ~/.claude/projects/<key>/... (memory
+  // files, subagent sidecars, `writtenPaths` entries) survive the
+  // Alice→Neo key change by round-tripping through {{CLAUDE_STORE}}.
+  const rewriteString = (s: string) =>
+    localToPortable(s, projectRoot, localHome, storeDir ?? undefined);
 
   for (const sessionFile of sessionFiles) {
     const meta = await extractSessionMeta(sessionFile);
