@@ -108,14 +108,10 @@ Gathered from two real-world export tests:
 
 ### Medium priority
 
-- [ ] **Redaction reporting is confusing.** Export summary says
-      "Redacted 38 potential secrets" but the output file actually contains
-      122 redaction markers. Root cause: 38 is the count of unique pattern
-      hits, 122 is the total number of replacement markers written (same
-      hit replaced in multiple serialized fields). Not a bug but misleading.
-      Fix: report both — "found 38 unique secrets, wrote 122 redaction
-      markers across N fields". Also: consider grouping the redaction log
-      by pattern type instead of listing each hit.
+- [x] **Redaction reporting is confusing.** Summary now shows both unique
+      secrets and total markers, plus a per-pattern breakdown. The log
+      (`.claude-handoff/redaction-log.json`) groups hits by pattern with
+      dedup'd contexts.
 
 - [ ] **`inspect` command for shared sessions.** Opening a `.jsonl` file
       from `.claude-shared/sessions/` with `cat` is unreadable — pure JSON
@@ -126,10 +122,9 @@ Gathered from two real-world export tests:
       Never print raw content. Same philosophy as `.claude/commands/
 inspect-session.md`.
 
-- [ ] **Conflict behavior on import.** If a session with the same ID
-      already exists in `~/.claude/projects/<slug>/`, current behavior is
-      untested. Decide and document: skip, overwrite with warning, or
-      require `--force`. Add explicit handling.
+- [x] **Conflict behavior on import.** Default is skip-with-warning;
+      `--overwrite` replaces. Summary now separately reports imported /
+      overwritten / skipped counts. Documented in README.
 
 ### Low priority
 
@@ -139,11 +134,10 @@ inspect-session.md`.
       signal in the demo test — so this is less urgent than assumed. Revisit
       after more real team use; maybe we don't even need it.
 
-- [ ] **Reporting polish for status/list.** `status` shows session IDs and
-      record counts but not file size, last modification, or time since
-      last export. `list` shows only shared sessions. Consider adding:
-      last export timestamp, size, a "freshness" indicator ("local session
-      modified after last export"), and a `--verbose` flag.
+- [x] **Reporting polish for status.** `status` now shows size and
+      human-readable age per session, plus a `*` marker for local sessions
+      modified since the last export. `list` polish + `--verbose` still
+      open.
 
 - [x] **No-arg CLI behavior.** Running `claude-handoff` alone now runs
       `status` by default and hints at next steps.
