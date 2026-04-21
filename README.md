@@ -187,7 +187,6 @@ npm link               # optional: make `claude-handoff` available globally
 ## Related discussions
 
 - [anthropics/claude-code#12646](https://github.com/anthropics/claude-code/issues/12646) — session sharing between machines
-- [anthropics/claude-code#25947](https://github.com/anthropics/claude-code/issues/25947) — team collaboration with Claude Code context
 
 ## License
 
