@@ -55,18 +55,44 @@ export async function statusCommand(projectRoot: string): Promise<void> {
 
   console.log();
 
-  // Shared sessions
-  const sharedFiles = await listSessionFiles(sessionsDir);
+  // Shared sessions. Prefer the manifest when present — it tells us
+  // what's actually been exported (regardless of on-disk layout, v1
+  // flat or v2 bundle). Fall back to scanning for flat .jsonl files
+  // only when there's no manifest (ad-hoc shared dirs assembled by
+  // hand, etc.).
   console.log(`Shared sessions (.claude-shared/sessions/):`);
-  if (sharedFiles.length === 0) {
-    console.log('  (none)');
-  } else {
-    for (const f of sharedFiles) {
-      const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
-      const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+  if (manifest && manifest.sessions.length > 0) {
+    for (const entry of manifest.sessions) {
+      const title = entry.title ?? '(untitled)';
+      const transcript = entry.artifacts.find((a) => a.kind === 'transcript');
+      const sidecarCount = entry.artifacts.filter((a) => a.kind !== 'transcript').length;
+      const recordNote = transcript?.recordCount
+        ? `${transcript.recordCount} records`
+        : `${entry.artifacts.length} artifact(s)`;
+      const sideNote = sidecarCount > 0 ? `, ${sidecarCount} sidecar(s)` : '';
+      const sizeNote = transcript?.bytes ? `, ${humanSize(transcript.bytes)}` : '';
       console.log(
-        `  ${path.basename(f)} — ${title} (${meta.recordCount} records, ${humanSize(fileStat.size)})`,
+        `  ${entry.sessionId} — ${title} (${recordNote}${sideNote}${sizeNote})`,
       );
+    }
+    if (manifest.memory && manifest.memory.files.length > 0) {
+      console.log(
+        `  + ${manifest.memory.files.length} memory file(s)`,
+      );
+    }
+  } else {
+    // No manifest — scan for flat .jsonl files as a best-effort.
+    const sharedFiles = await listSessionFiles(sessionsDir);
+    if (sharedFiles.length === 0) {
+      console.log('  (none)');
+    } else {
+      for (const f of sharedFiles) {
+        const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
+        const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+        console.log(
+          `  ${path.basename(f)} — ${title} (${meta.recordCount} records, ${humanSize(fileStat.size)})`,
+        );
+      }
     }
   }
 
