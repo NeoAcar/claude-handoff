@@ -186,7 +186,9 @@ npm link               # optional: make `claude-handoff` available globally
 
 ## Related discussions
 
-- [anthropics/claude-code#12646](https://github.com/anthropics/claude-code/issues/12646) — session sharing between machines
+- [anthropics/claude-code#11455](https://github.com/anthropics/claude-code/issues/11455) — Session Handoff / Continuity Support (open, most active)
+- [anthropics/claude-code#44063](https://github.com/anthropics/claude-code/issues/44063) — Resume Any Claude Session in the CLI (open)
+- [anthropics/claude-code#10368](https://github.com/anthropics/claude-code/issues/10368) — Chat Package Export/Import: Git-compatible format for team collaboration (the original request, closed/locked)
 
 ## License
 
