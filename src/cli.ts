@@ -36,6 +36,7 @@ program
   .option('--dry-run', 'Show what would happen, write nothing', false)
   .option('--no-redact', 'Skip secret redaction')
   .option('--i-know-what-im-doing', 'Required with --no-redact', false)
+  .option('--strip-progress', 'Drop streaming progress records (smaller files)', false)
   .action(async (opts) => {
     await run(() =>
       exportCommand(getProjectRoot(), {
@@ -46,6 +47,7 @@ program
         session: opts.session,
         last: opts.last,
         since: opts.since,
+        stripProgress: opts.stripProgress,
       }),
     );
   });
@@ -78,8 +80,9 @@ program
 program
   .command('list')
   .description('List sessions in .claude-shared/')
-  .action(async () => {
-    await run(() => listCommand(getProjectRoot()));
+  .option('-v, --verbose', 'Show author, export time, and redaction markers per session', false)
+  .action(async (opts) => {
+    await run(() => listCommand(getProjectRoot(), { verbose: opts.verbose }));
   });
 
 // Default action when no subcommand is given: run `status` and hint at next steps.
