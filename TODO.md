@@ -66,7 +66,6 @@ Smoke-tested on two real projects on disk.
       covering full Alice→Neo round-trip with all four artifact kinds.
       Validated against a real session on disk that has 8 subagent
       sidecars (Hedgehogs project). 119 tests pass.
-- [ ] Docs: HOW_IT_WORKS.md "session bundle" subsection — follow-up.
 
 ### Phase 3D — Repo memory (explicit opt-in)
 
