@@ -21,8 +21,11 @@ import os from 'node:os';
 import { localToPortable, deepRewrite } from '../core/paths.js';
 import {
   collectSessionArtifacts,
+  findCanonicalGitRoot,
+  findExistingMemoryDir,
   findProjectStoreDir,
   getClaudeProjectsDir,
+  listMemoryFiles,
   listProjectSessionFiles,
 } from '../core/store.js';
 import type { SourceArtifact } from '../core/store.js';
@@ -32,7 +35,7 @@ import { stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
-import type { BundleArtifact, ManifestEntry } from '../core/manifest.js';
+import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
 
 export interface ExportOptions {
   dryRun: boolean;
@@ -51,6 +54,12 @@ export interface ExportOptions {
    * full thinking context preserved.
    */
   keepSignatures?: boolean;
+  /**
+   * Export the project's auto-memory (`~/.claude/projects/<key>/memory/`)
+   * alongside sessions. Off by default — memory files often contain
+   * personal observations the user hasn't explicitly decided to share.
+   */
+  includeMemory?: boolean;
 }
 
 interface ExportResult {
@@ -344,6 +353,28 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     );
   }
 
+  // --- Project memory (opt-in via --memory) ---
+  if (options.includeMemory) {
+    const memoryBundle = await exportMemory({
+      projectRoot,
+      sharedDir,
+      rewriteString,
+      redact: !options.noRedact,
+      customPatterns,
+      onHits: (hits) => result.allHits.push(...hits),
+    });
+    if (memoryBundle) {
+      manifest.memory = memoryBundle;
+      result.totalRedactionHits = result.allHits.length;
+      const redactedCount = memoryBundle.files.reduce((n, f) => n + (f.redactionHits ?? 0), 0);
+      console.log(
+        `  Exported ${memoryBundle.files.length} memory file(s) (${redactedCount} redaction marker(s))`,
+      );
+    } else {
+      console.log('  No memory directory found for this project — nothing to export.');
+    }
+  }
+
   // Write manifest
   manifest.lastExportAt = new Date().toISOString();
   await writeManifest(sharedDir, manifest);
@@ -430,6 +461,57 @@ async function transformTextFile(src: string, dst: string, ctx: TransformCtx): P
     ctx.onHits(hits);
   }
   await writeFile(dst, content, 'utf-8');
+}
+
+/**
+ * Export the project's memory/ tree into `.claude-shared/memory/`,
+ * excluding `MEMORY.md` (which is LLM-regenerated). Returns a
+ * MemoryBundle manifest section or null when there's nothing to export.
+ */
+async function exportMemory(args: {
+  projectRoot: string;
+  sharedDir: string;
+  rewriteString: (s: string) => string;
+  redact: boolean;
+  customPatterns: RedactionPattern[];
+  onHits: (hits: RedactionHit[]) => void;
+}): Promise<{ exportedAt: string; sourceGitRoot?: string; files: MemoryArtifact[] } | null> {
+  const memSource = await findExistingMemoryDir(args.projectRoot);
+  if (!memSource) return null;
+
+  const sourceGitRoot = await findCanonicalGitRoot(args.projectRoot);
+
+  const entries = await listMemoryFiles(args.projectRoot);
+  if (entries.length === 0) return null;
+
+  const memOut = path.join(args.sharedDir, 'memory');
+  await mkdir(memOut, { recursive: true });
+
+  const files: MemoryArtifact[] = [];
+  for (const entry of entries) {
+    const dest = path.join(memOut, entry.relativePath);
+    await mkdir(path.dirname(dest), { recursive: true });
+    const hitsBefore = 0;
+    const sink: RedactionHit[] = [];
+    await transformTextFile(entry.absolutePath, dest, {
+      rewriteString: args.rewriteString,
+      redact: args.redact,
+      customPatterns: args.customPatterns,
+      onHits: (hits) => sink.push(...hits),
+    });
+    args.onHits(sink);
+    files.push({
+      bundlePath: entry.relativePath,
+      bytes: await fileSize(dest),
+      redactionHits: sink.length - hitsBefore,
+    });
+  }
+
+  return {
+    exportedAt: new Date().toISOString(),
+    sourceGitRoot,
+    files,
+  };
 }
 
 async function fileSize(p: string): Promise<number> {

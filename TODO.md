@@ -66,21 +66,36 @@ Smoke-tested on two real projects on disk.
       covering full Alice→Neo round-trip with all four artifact kinds.
       Validated against a real session on disk that has 8 subagent
       sidecars (Hedgehogs project). 119 tests pass.
+- [ ] Docs: HOW_IT_WORKS.md "session bundle" subsection — follow-up.
 
-### Phase 3D — Repo memory (explicit opt-in)
+### Phase 3D — Repo memory (explicit opt-in) ✅ (MVP)
 
-Design decision needed before code. Memory is personal by default
-(feedback about the user's style, preferences); we must not leak it
-without intent.
+Informed by the second Codex pass (`task-mo8qd79h-aa0vti`): memory is
+keyed by canonical git root, MEMORY.md is LLM-maintained (excluded
+from the bundle), resume doesn't depend on memory being present, and
+session JSONL references memory files by absolute path (so we
+translate via `{{CLAUDE_STORE}}`).
 
-- [ ] `--memory` flag on export (off by default)
-- [ ] When set, export `<store>/memory/*.md` except `MEMORY.md` (it's
-      an index — rebuild on import)
-- [ ] Add `.claude-handoff-memory-ignore` or similar allow-list so
-      teams can share only the memory files they mean to
-- [ ] On import, merge into local memory dir. On file-name collision:
-      default skip, `--overwrite` replaces, future `--merge` strategy TBD
-- [ ] Regenerate `MEMORY.md` from present files on import
+- [x] `--memory` flag on export (off by default)
+- [x] Walks `<store-via-git-root>/memory/*` recursively, excluding
+      `MEMORY.md`
+- [x] `{{CLAUDE_STORE}}` placeholder round-trips cross-machine
+      references (Alice's key → Neo's key) inside both memory files
+      and session JSONL
+- [x] On import, writes to the recipient's canonical-git-root-keyed
+      memory dir; skip-by-default on collision, `--overwrite` replaces
+- [x] Integration test covers the Alice→Neo memory round-trip with a
+      real git repo on each side
+
+Open follow-ups:
+
+- [ ] `.claude-handoff-memory-ignore` allow-list for teams that want
+      to share only select memory files (today it's all-or-nothing
+      inside memory/, minus MEMORY.md)
+- [ ] thinking.signature strip is per-record; same approach could
+      apply to subagent meta sidecar fields the Codex pass flagged
+      (`worktreePath`, `description`, `title`, `command`, timestamps)
+      — decide whether we want a metadata-scrub pass there too
 
 ### Phase 3E — Worktree-aware discovery (polish)
 

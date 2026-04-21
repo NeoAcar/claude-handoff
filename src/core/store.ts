@@ -19,6 +19,10 @@ import os from 'node:os';
 import { createReadStream } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Root of Claude Code's per-project session storage.
@@ -134,6 +138,117 @@ export async function listProjectSessionFiles(projectRoot: string): Promise<stri
   const storeDir = await findProjectStoreDir(projectRoot);
   if (!storeDir) return [];
   return listJsonlFilesByMtime(storeDir);
+}
+
+// --- Auto-memory discovery ---
+
+/**
+ * Resolve the canonical git root for a project, so callers can key
+ * auto-memory by repository identity instead of per-worktree cwd.
+ *
+ * Matches the reference Claude Code pattern
+ * (codecli src/memdir/paths.ts): `findCanonicalGitRoot(getProjectRoot()) ?? getProjectRoot()`.
+ * Shell out to `git rev-parse --show-toplevel`; if git isn't present or
+ * the path isn't a repo, fall back to the canonicalized project root.
+ */
+export async function findCanonicalGitRoot(projectRoot: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: projectRoot,
+    });
+    const raw = stdout.trim();
+    if (raw.length > 0) {
+      return canonicalizeProjectRoot(raw);
+    }
+  } catch {
+    // git missing or not a repo — fall through
+  }
+  return canonicalizeProjectRoot(projectRoot);
+}
+
+/**
+ * Return the `~/.claude/projects/<key>/memory/` directory for the given
+ * project. Keyed by canonical git root (per codecli
+ * src/memdir/paths.ts:199-205), which is why siblings in a worktree
+ * setup share one memory store.
+ *
+ * Returns the absolute path whether or not the directory exists — the
+ * caller checks. This is intentional: import needs a target path even
+ * on first run, the same way `getOrComputeStoreDir` works for sessions.
+ */
+export async function getMemoryDir(projectRoot: string): Promise<string> {
+  const gitRoot = await findCanonicalGitRoot(projectRoot);
+  const key = sanitizeProjectKey(gitRoot);
+  return path.join(getClaudeProjectsDir(), key, 'memory');
+}
+
+/**
+ * Same as {@link getMemoryDir} but returns `null` when the memory
+ * directory doesn't exist on disk. Used by the exporter to avoid
+ * reporting "no memory found" when the user hasn't opted into memory
+ * export anyway.
+ */
+export async function findExistingMemoryDir(projectRoot: string): Promise<string | null> {
+  const memDir = await getMemoryDir(projectRoot);
+  try {
+    const s = await stat(memDir);
+    return s.isDirectory() ? memDir : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One markdown (or nested) file inside the project's memory directory.
+ */
+export interface MemoryFileEntry {
+  /** Absolute path on disk. */
+  absolutePath: string;
+  /** Path relative to the memory dir, using forward slashes. */
+  relativePath: string;
+}
+
+/**
+ * Walk the project's memory directory and list every file except
+ * `MEMORY.md`. MEMORY.md is an LLM-maintained index — bundling it
+ * across a handoff would stamp a stale index over the receiver's
+ * (potentially newer) one, so we skip it and let Claude Code's next
+ * dream consolidation rebuild it from the imported files.
+ *
+ * Returns an empty array when the memory dir is missing.
+ */
+export async function listMemoryFiles(projectRoot: string): Promise<MemoryFileEntry[]> {
+  const memDir = await findExistingMemoryDir(projectRoot);
+  if (!memDir) return [];
+  const out: MemoryFileEntry[] = [];
+  await walkMemoryDir(memDir, memDir, out);
+  return out;
+}
+
+async function walkMemoryDir(current: string, root: string, out: MemoryFileEntry[]): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(current);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    const full = path.join(current, name);
+    let s;
+    try {
+      s = await stat(full);
+    } catch {
+      continue;
+    }
+    if (s.isDirectory()) {
+      await walkMemoryDir(full, root, out);
+      continue;
+    }
+    if (!s.isFile()) continue;
+    const relativePath = path.relative(root, full).split(path.sep).join('/');
+    if (relativePath === 'MEMORY.md') continue;
+    out.push({ absolutePath: full, relativePath });
+  }
 }
 
 /**

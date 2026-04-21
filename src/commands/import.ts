@@ -23,7 +23,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
-import { getOrComputeStoreDir } from '../core/store.js';
+import { getMemoryDir, getOrComputeStoreDir } from '../core/store.js';
 import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
@@ -170,6 +170,38 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
       `Skipped ${skippedCount} (already existed locally — rerun with --overwrite to replace)`,
     );
   }
+
+  // --- Memory import ---
+  if (manifest?.memory && manifest.memory.files.length > 0) {
+    const memDest = await getMemoryDir(projectRoot);
+    await mkdir(memDest, { recursive: true });
+    let memImported = 0;
+    let memSkipped = 0;
+    for (const artifact of manifest.memory.files) {
+      const src = path.join(sharedDir, 'memory', artifact.bundlePath);
+      if (!(await pathExists(src))) continue;
+      const dst = path.join(memDest, artifact.bundlePath);
+      const exists = await pathExists(dst);
+      if (exists && !options.overwrite) {
+        memSkipped++;
+        continue;
+      }
+      await mkdir(path.dirname(dst), { recursive: true });
+      const content = await readFile(src, 'utf-8');
+      await writeFile(dst, rewriteString(content), 'utf-8');
+      memImported++;
+    }
+    console.log(`Imported ${memImported} memory file(s) into ${memDest}`);
+    if (memSkipped > 0) {
+      console.log(
+        `  ${memSkipped} memory file(s) skipped (existed locally — use --overwrite to replace)`,
+      );
+    }
+    console.log(
+      '  (MEMORY.md is LLM-regenerated; it was not bundled. Claude Code will rebuild it on next use.)',
+    );
+  }
+
   console.log('Open Claude Code and use /resume to see imported sessions.');
 }
 

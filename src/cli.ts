@@ -42,6 +42,11 @@ program
     'Keep thinking.signature fields (default: strip to avoid API 400s after cross-machine resume)',
     false,
   )
+  .option(
+    '--memory',
+    "Also export the project's auto-memory files (~/.claude/projects/<key>/memory/ except MEMORY.md)",
+    false,
+  )
   .action(async (opts) => {
     await run(() =>
       exportCommand(getProjectRoot(), {
@@ -54,6 +59,7 @@ program
         since: opts.since,
         stripProgress: opts.stripProgress,
         keepSignatures: opts.keepSignatures,
+        includeMemory: opts.memory,
       }),
     );
   });

@@ -47,13 +47,17 @@ node dist/cli.js <command>
 ### Export options
 
 ```
---session <id>    Export one specific session
---last <n>        Export the last N sessions
---since <date>    Only export sessions started on/after this ISO date
---author <name>   Tag with author name (default: git user.name)
---dry-run         Show what would happen, write nothing
---no-redact       Skip redaction (requires --i-know-what-im-doing)
---strip-progress  Drop streaming progress records (smaller files)
+--session <id>      Export one specific session
+--last <n>          Export the last N sessions
+--since <date>      Only export sessions started on/after this ISO date
+--author <name>     Tag with author name (default: git user.name)
+--dry-run           Show what would happen, write nothing
+--no-redact         Skip redaction (requires --i-know-what-im-doing)
+--strip-progress    Drop streaming progress records (smaller files)
+--keep-signatures   Keep thinking.signature fields (default: strip to
+                    avoid API 400s after cross-machine resume)
+--memory            Also export ~/.claude/projects/<key>/memory/ files
+                    (excluding MEMORY.md, which Claude Code regenerates)
 ```
 
 ### Custom redaction patterns

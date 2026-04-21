@@ -66,11 +66,32 @@ export interface ManifestEntry {
   legacyExportedFilename?: string;
 }
 
+/**
+ * A single shared memory file. Memory lives project-wide (not per
+ * session), so it's tracked at the top level of the manifest rather
+ * than inside a ManifestEntry.
+ */
+export interface MemoryArtifact {
+  /** Path relative to `.claude-shared/memory/`, matches the original. */
+  bundlePath: string;
+  bytes?: number;
+  redactionHits?: number;
+}
+
+export interface MemoryBundle {
+  exportedAt: string;
+  /** Canonical git root this memory set was captured from, when known. */
+  sourceGitRoot?: string;
+  files: MemoryArtifact[];
+}
+
 export interface Manifest {
   schemaVersion: number;
   toolVersion: string;
   lastExportAt: string;
   sessions: ManifestEntry[];
+  /** Optional project-level memory bundle, written when `export --memory` ran. */
+  memory?: MemoryBundle;
 }
 
 export const SCHEMA_VERSION = 2;
