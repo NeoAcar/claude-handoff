@@ -42,7 +42,7 @@
     "portable",
     "context"
   ],
-  "author": "NeoAcar",
+  "author": "Emin Acar (NeoAcar)",
   "license": "MIT",
   "dependencies": {
     "commander": "^13.1.0"
