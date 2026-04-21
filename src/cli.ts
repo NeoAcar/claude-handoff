@@ -82,6 +82,16 @@ program
     await run(() => listCommand(getProjectRoot()));
   });
 
+// Default action when no subcommand is given: run `status` and hint at next steps.
+program.action(async () => {
+  await run(async () => {
+    await statusCommand(getProjectRoot());
+    console.log(
+      '\nNext: `claude-handoff export` to share, or `claude-handoff --help` for all commands.',
+    );
+  });
+});
+
 function getProjectRoot(): string {
   return resolve(process.cwd());
 }

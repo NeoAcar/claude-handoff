@@ -122,10 +122,10 @@ Gathered from two real-world export tests:
       from `.claude-shared/sessions/` with `cat` is unreadable — pure JSON
       blobs. Users and reviewers need a safe way to peek at a shared
       session before pulling or pushing. Build `claude-handoff inspect
-    <session-id>` that prints: user message count, assistant response
+  <session-id>` that prints: user message count, assistant response
       count, tool_use summary, redaction summary, first/last timestamps.
       Never print raw content. Same philosophy as `.claude/commands/
-    inspect-session.md`.
+  inspect-session.md`.
 
 - [ ] **Conflict behavior on import.** If a session with the same ID
       already exists in `~/.claude/projects/<slug>/`, current behavior is
@@ -146,9 +146,8 @@ Gathered from two real-world export tests:
       last export timestamp, size, a "freshness" indicator ("local session
       modified after last export"), and a `--verbose` flag.
 
-- [ ] **No-arg CLI behavior.** Running `claude-handoff` alone prints help.
-      Consider a richer default: run `status` automatically and hint at
-      next steps. Minor UX.
+- [x] **No-arg CLI behavior.** Running `claude-handoff` alone now runs
+      `status` by default and hints at next steps.
 
 - [ ] **Distribution friction.** Tool is not on npm yet. Installing it
       requires clone + `npm link`, which is a significant barrier for
