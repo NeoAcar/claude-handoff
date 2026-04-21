@@ -1,5 +1,136 @@
 # TODO
 
+## Phase 3 — Storage layer refactor (from Codex analysis of /tmp/codecli)
+
+A clean-room refactor informed by the reference implementation's
+storage resolution patterns. The current `src/core/paths.ts` conflates
+**placeholder rewriting** ("translate paths for portability") with
+**Claude store discovery** ("find the project dir on this machine").
+Those are two jobs; splitting them unlocks proper bundle export
+(subagents + session-memory) later.
+
+Key insights from the reference that we should apply:
+
+- **Canonicalize project roots** with `realpath()` + Unicode NFC before
+  matching against Claude Code's stored cwd. Handles symlinks + the
+  macOS NFD/NFC filename divergence.
+- **`sessionId` is the durable identity.** Filenames and project
+  directories are presentation, not identity.
+- **Sessions are bundles, not single files.** Main transcript lives at
+  `<store>/<sessionId>.jsonl`, sidecars at `<store>/<sessionId>/{subagents,remote-agents,session-memory}/...`.
+- **MEMORY.md is an index, not payload.** Memory scans exclude it; the
+  index is rebuilt from individual memory files.
+- **Auto-memory is keyed by canonical git root**, so worktrees share
+  one memory store.
+
+### Phase 3A — Storage layer split (foundation)
+
+- [ ] New module `src/core/store.ts` with:
+  - `canonicalizeProjectRoot(path): Promise<string>` — realpath + NFC,
+    with graceful fallback when the path doesn't exist on disk
+  - `getClaudeProjectsDir(): string` — moved from `paths.ts`
+  - `sanitizeProjectKey(canonicalPath): string` — same regex rule as
+    the current `computeSlug`, but applied to canonical paths
+  - `findProjectStoreDir(projectRoot): Promise<string | null>` —
+    fast-path via key lookup, fallback by peeking at stored `cwd`
+    fields in candidate dirs' session files
+  - `getOrComputeStoreDir(projectRoot): Promise<string>` — convenience
+    for import, which needs a path even when the dir doesn't exist yet
+  - `listProjectSessionFiles(projectRoot): Promise<string[]>` — main
+    transcripts only, newest first
+  - `resolveMainSessionFile(sessionId, projectRoot?): Promise<string | null>`
+    — single-project lookup; cross-project scan when `projectRoot`
+    omitted
+- [ ] Shrink `src/core/paths.ts` to placeholder rewriting only. Remove
+  `computeSlug`, `findSlugForPath`, `getClaudeProjectsDir`,
+  `getProjectSlugDir`. Keep `localToPortable`, `portableToLocal`,
+  `deepRewrite`, placeholder constants, boundary-safe internals.
+- [ ] Rewire commands to use `store.ts`:
+  - `export.ts`: `findProjectStoreDir` + `listProjectSessionFiles`
+  - `import.ts`: `getOrComputeStoreDir`
+  - `status.ts`: `findProjectStoreDir` + `listProjectSessionFiles`
+- [ ] Tests:
+  - Add `test/core/store.test.ts` covering canonicalization,
+    project-key computation, fast-path lookup, fallback-via-cwd
+    lookup, and sessionId resolution. Use `mkdtemp` + fixture JSONL.
+  - Trim `test/core/paths.test.ts` to rewriting + `deepRewrite`; move
+    the slug / findSlugForPath cases to `store.test.ts`.
+- [ ] No behavior change for end users. 113+ tests green.
+
+### Phase 3B — Bundle manifest (session = main transcript + artifacts)
+
+- [ ] Extend `src/core/manifest.ts`:
+  - Bump schema version to `0.2.0`
+  - `ManifestEntry` gets `artifacts: BundleArtifact[]` (optional for
+    back-compat read of `0.1.0` manifests)
+  - `BundleArtifact { kind: 'transcript' | 'subagent' | 'remote-agent' | 'session-memory', exportedPath: string, originalRelativePath: string, recordCount?, redactionHits? }`
+  - On read of a `0.1.0` manifest, synthesize a single-artifact entry
+    per session so status/list keep working
+- [ ] New on-disk layout under `.claude-shared/sessions/`:
+  - Main: `<timestamp>_<author>_<sid>.jsonl` (unchanged for
+    back-compat)
+  - Sidecars: `<sid>.sidecars/{subagents,remote-agents,session-memory}/...`
+  - This mixes flat + nested deliberately: the flat main transcript
+    keeps `ls` and `git log` human-readable; sidecars sit alongside
+    when present.
+
+### Phase 3C — Collect subagents and session-memory
+
+- [ ] `store.ts:collectSessionArtifacts(sessionFile): Promise<Artifact[]>`:
+  - Look for `<store>/<sessionId>/subagents/*.jsonl` and
+    `*.meta.json`
+  - Look for `<store>/<sessionId>/remote-agents/*.jsonl`
+  - Look for `<store>/<sessionId>/session-memory/summary.md`
+- [ ] `export.ts` iterates artifacts, applies the same
+  path-rewrite + redaction pipeline per file type:
+  - `.jsonl` → streaming transform (existing code)
+  - `.md`, `.json` → buffered read, redact + path-rewrite, write
+- [ ] `import.ts` reconstructs the bundle dir under the user's local
+  Claude store
+- [ ] Fixture: synthetic session with a subagent + session-memory
+  sidecar, round-trip test in `scripts/roundtrip-test.sh`
+- [ ] Docs: HOW_IT_WORKS.md gets a "session bundle" subsection
+
+### Phase 3D — Repo memory (explicit opt-in)
+
+Design decision needed before code. Memory is personal by default
+(feedback about the user's style, preferences); we must not leak it
+without intent.
+
+- [ ] `--memory` flag on export (off by default)
+- [ ] When set, export `<store>/memory/*.md` except `MEMORY.md` (it's
+  an index — rebuild on import)
+- [ ] Add `.claude-handoff-memory-ignore` or similar allow-list so
+  teams can share only the memory files they mean to
+- [ ] On import, merge into local memory dir. On file-name collision:
+  default skip, `--overwrite` replaces, future `--merge` strategy TBD
+- [ ] Regenerate `MEMORY.md` from present files on import
+
+### Phase 3E — Worktree-aware discovery (polish)
+
+- [ ] `store.ts:enumerateWorktreeRoots(projectRoot): Promise<string[]>`
+  via `git worktree list --porcelain`
+- [ ] `listProjectSessionFiles(projectRoot, { includeWorktrees: true })`
+  unions sessions from all worktrees
+- [ ] Gated behind a flag initially (`--include-worktrees` on
+  `export`/`status`)
+
+### What we deliberately skip from the reference
+
+- `Project` write-queue, tail-window metadata re-append — live-CLI
+  concerns.
+- `permissions/filesystem.ts` carve-outs — not our job.
+- Background `extractMemories` service — requires an LLM call.
+- `teamMemorySync` — out of scope for a git-based tool.
+
+### Open questions (may need another Codex pass)
+
+- Long-path hash tolerance: what's the hash function and threshold
+  when Claude Code hashes instead of sluggifying? MVP punts; if a
+  user hits this we revisit.
+- `agent-*.meta.json` sidecar files — do they contain paths or just
+  metadata? Affects whether we need to rewrite them on export.
+
 ## Phase 2 — Ready to Start
 
 ### Features
