@@ -122,10 +122,10 @@ Gathered from two real-world export tests:
       from `.claude-shared/sessions/` with `cat` is unreadable — pure JSON
       blobs. Users and reviewers need a safe way to peek at a shared
       session before pulling or pushing. Build `claude-handoff inspect
-  <session-id>` that prints: user message count, assistant response
+<session-id>` that prints: user message count, assistant response
       count, tool_use summary, redaction summary, first/last timestamps.
       Never print raw content. Same philosophy as `.claude/commands/
-  inspect-session.md`.
+inspect-session.md`.
 
 - [ ] **Conflict behavior on import.** If a session with the same ID
       already exists in `~/.claude/projects/<slug>/`, current behavior is

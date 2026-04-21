@@ -69,6 +69,32 @@ describe('redactText — default patterns', () => {
     expect(text).not.toContain('user:pass');
   });
 
+  it('does not match ordinary URLs followed by an @ elsewhere on the line', () => {
+    const { text, hits } = redactText(
+      'npm notice Changelog: https://github.com/foo/bar then email me@example.com',
+    );
+    expect(text).not.toContain('[REDACTED:credentials]');
+    expect(hits.filter((h) => h.type === 'url-with-creds')).toHaveLength(0);
+  });
+
+  it('does not match URL with port number', () => {
+    const { text, hits } = redactText('server running at http://localhost:3000/api@v1');
+    expect(text).not.toContain('[REDACTED:credentials]');
+    expect(hits.filter((h) => h.type === 'url-with-creds')).toHaveLength(0);
+  });
+
+  it('still redacts creds with port in host', () => {
+    const { text } = redactText('postgres://admin:secretpw@db.internal/app');
+    // Note: this pattern is https?:// only, so postgres:// isn't matched.
+    expect(text).toContain('admin:secretpw');
+  });
+
+  it('redacts creds when URL appears mid-sentence with trailing text', () => {
+    const { text } = redactText('see https://bob:hunter2@example.com/ and carry on');
+    expect(text).toContain('[REDACTED:credentials]');
+    expect(text).not.toContain('bob:hunter2');
+  });
+
   it('redacts private key block', () => {
     const pem = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn+ygWyF8PbnGPo

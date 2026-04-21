@@ -51,7 +51,12 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
   },
   {
     name: 'url-with-creds',
-    regex: /https?:\/\/[^:]+:[^@]+@/g,
+    // Match only true user:pass@host forms. The previous pattern
+    // [^:]+:[^@]+@ was too greedy — in a line containing any URL and a later
+    // `@` (e.g., email addresses, npm changelog notices), it matched across
+    // the whole span and redacted innocuous URLs. Restrict both sides of the
+    // colon to non-separator characters so we only catch embedded credentials.
+    regex: /https?:\/\/[^:/?#@\s]+:[^@/?#\s]+@/g,
     replacement: 'https://[REDACTED:credentials]@',
   },
   {
