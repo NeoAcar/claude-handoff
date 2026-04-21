@@ -53,7 +53,9 @@ afterEach(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-async function makeProject(label: string): Promise<{ home: string; project: string; storeDir: string }> {
+async function makeProject(
+  label: string,
+): Promise<{ home: string; project: string; storeDir: string }> {
   const home = join(scratch, `${label}-home`);
   const project = join(home, 'proj');
   await mkdir(project, { recursive: true });
@@ -63,7 +65,11 @@ async function makeProject(label: string): Promise<{ home: string; project: stri
 }
 
 /** Write a session transcript with N simple records. */
-async function seedSession(storeDir: string, project: string, recordCount: number): Promise<string> {
+async function seedSession(
+  storeDir: string,
+  project: string,
+  recordCount: number,
+): Promise<string> {
   const lines: string[] = [];
   for (let i = 0; i < recordCount; i++) {
     lines.push(
@@ -81,7 +87,11 @@ async function seedSession(storeDir: string, project: string, recordCount: numbe
 }
 
 /** Simulate `claude --resume` appending N more records to a session file. */
-async function appendTurns(sessionPath: string, newRecordCount: number, project: string): Promise<void> {
+async function appendTurns(
+  sessionPath: string,
+  newRecordCount: number,
+  project: string,
+): Promise<void> {
   const lines: string[] = [];
   for (let i = 0; i < newRecordCount; i++) {
     lines.push(
@@ -112,11 +122,9 @@ describe('iterative handoff', () => {
 
     // Round 2 — Neo pulls + imports, resumes, appends turns, re-exports.
     const neo = await makeProject('neo');
-    await cp(
-      join(alice.project, '.claude-shared'),
-      join(neo.project, '.claude-shared'),
-      { recursive: true },
-    );
+    await cp(join(alice.project, '.claude-shared'), join(neo.project, '.claude-shared'), {
+      recursive: true,
+    });
     process.env.HOME = neo.home;
     await importCommand(neo.project, {
       dryRun: false,
@@ -141,11 +149,10 @@ describe('iterative handoff', () => {
     expect(neoEntry.previousExports?.[0].author).toBe(process.env.USER ?? 'alice');
 
     // Round 3 — Alice pulls Neo's update; import should auto-catch-up.
-    await cp(
-      join(neo.project, '.claude-shared'),
-      join(alice.project, '.claude-shared'),
-      { recursive: true, force: true },
-    );
+    await cp(join(neo.project, '.claude-shared'), join(alice.project, '.claude-shared'), {
+      recursive: true,
+      force: true,
+    });
     process.env.HOME = alice.home;
     await importCommand(alice.project, {
       dryRun: false,

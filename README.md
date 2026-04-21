@@ -46,6 +46,14 @@ Alice's session shows up in Neo's `/resume` picker with its original
 title and 100% of the conversation history, tool calls, and subagent
 transcripts.
 
+**Iteration.** The same session can ping-pong through the repo
+multiple times. After Neo resumes and keeps working, Neo runs
+`export` again and Alice imports the follow-up. Each round's
+author and timestamp is preserved in the manifest, so you can see
+who added what. Concurrent editing (both sides resuming at once
+and both appending) is **not** yet supported — use the tool for
+sequential handoff.
+
 ## What ships across machines
 
 Every session is exported as a bundle directory:
@@ -92,6 +100,8 @@ to the receiver's.
 --memory            Also export the project's auto-memory files
                     (~/.claude/projects/<key>/memory/, minus MEMORY.md
                     which Claude Code regenerates)
+--force             Override fork detection and re-export even when
+                    the local session appears behind the shared bundle
 ```
 
 ### Import options
@@ -102,9 +112,12 @@ to the receiver's.
 --overwrite       Replace existing local sessions with same ID
 ```
 
-If a shared session has the same ID as one already in your local
-`~/.claude/projects/<slug>/`, default is to **skip** it and report the
-collision. Pass `--overwrite` to replace.
+When the shared bundle is **ahead** of your local copy (teammate
+shared newer work), `import` auto-catches you up without
+`--overwrite`. When your local has **unshared** work (you resumed
+after last import), `import` skips by default and warns that
+`--overwrite` would discard the local changes. Pass `--overwrite`
+only when you mean to.
 
 ### Custom redaction patterns
 

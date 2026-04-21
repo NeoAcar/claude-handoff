@@ -9,42 +9,6 @@ ranges that shipped them; git history has the details.
 
 ### High priority
 
-- [ ] **Sequential iteration for the same session ID.** Today
-      `export` skips a session as soon as its ID appears in the
-      manifest, which means the Alice→Bob→Alice→Bob cycle on _one_
-      session is effectively one-shot — Bob's continuation never
-      makes it back into the bundle. Fix is small (~40 lines):
-      in `src/commands/export.ts`, replace the "already exported"
-      skip with a "has this session grown since last export" check.
-      Pseudocode:
-
-      ```ts
-      const existing = manifest.sessions.find((s) => s.sessionId === sessionId);
-      if (existing) {
-        const localCount = meta.recordCount;
-        const exportedCount = existing.artifacts.find(a => a.kind === 'transcript')?.recordCount ?? 0;
-        if (localCount <= exportedCount) continue;  // skip — no new turns
-        manifest.sessions = manifest.sessions.filter(s => s.sessionId !== sessionId);
-        await rm(bundleDir, { recursive: true, force: true });
-      }
-      // fall through to the existing export logic, which rebuilds the bundle
-      ```
-
-      Also:
-      - Improve `import`'s skip message to say "bundle is N records
-        ahead of your local copy — rerun with --overwrite to catch
-        up" instead of the generic "already exists locally".
-      - New integration test under `test/integration/` covering the
-        Alice → Bob → Alice → Bob round-trip on one session ID.
-      - Ships as `0.2.0` (user-visible behavior change).
-
-      Explicitly **out of scope** for this task: concurrent editing
-      (both sides have `claude --resume` running after the initial
-      handoff and both append). That's the "session forking" problem
-      and requires a real merge/divergence model. This fix assumes
-      sequential editing — only one party has the session open at a
-      time.
-
 - [ ] **Redactor false positives beyond `url-with-creds`.**
       Exporting from this repo still produces false positives from:
       (a) synthetic secrets inside `test/core/redactor.test.ts`
@@ -118,9 +82,6 @@ ranges that shipped them; git history has the details.
       regenerations. Deferred because current session titles
       already make the picker useful enough.
 
-- [ ] **npm publish.** Current install is clone + `npm link`.
-      Blocker on non-technical collaborators adopting the tool.
-
 - [ ] **Redaction via `detect-secrets` or `gitleaks`.** Optional
       shell-out for broader pattern coverage. Adds a dependency, so
       gate behind a flag.
@@ -145,6 +106,16 @@ ranges that shipped them; git history has the details.
 ---
 
 ## Completed
+
+### 0.2.0 — Iterative handoff
+
+Sequential round-tripping of the same session ID. Export uses
+mtime + record count to distinguish unchanged / has-new-turns /
+fork-suspected; prior rounds archived into `previousExports`.
+Import auto-catches-up when bundle is ahead, skip-with-warning
+when local is ahead. New `--force` escape hatch. See `CHANGELOG.md`.
+
+### 0.1.0 — Initial public release (published to npm)
 
 ### Phase 0–1 — Discovery and MVP
 
