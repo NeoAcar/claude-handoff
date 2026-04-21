@@ -42,7 +42,11 @@
     "portable",
     "context"
   ],
-  "author": "Emin Acar (NeoAcar)",
+  "author": {
+    "name": "Emin Acar",
+    "email": "eminacar859@gmail.com",
+    "url": "https://github.com/NeoAcar"
+  },
   "license": "MIT",
   "dependencies": {
     "commander": "^13.1.0"
