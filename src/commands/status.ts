@@ -71,14 +71,10 @@ export async function statusCommand(projectRoot: string): Promise<void> {
         : `${entry.artifacts.length} artifact(s)`;
       const sideNote = sidecarCount > 0 ? `, ${sidecarCount} sidecar(s)` : '';
       const sizeNote = transcript?.bytes ? `, ${humanSize(transcript.bytes)}` : '';
-      console.log(
-        `  ${entry.sessionId} — ${title} (${recordNote}${sideNote}${sizeNote})`,
-      );
+      console.log(`  ${entry.sessionId} — ${title} (${recordNote}${sideNote}${sizeNote})`);
     }
     if (manifest.memory && manifest.memory.files.length > 0) {
-      console.log(
-        `  + ${manifest.memory.files.length} memory file(s)`,
-      );
+      console.log(`  + ${manifest.memory.files.length} memory file(s)`);
     }
   } else {
     // No manifest — scan for flat .jsonl files as a best-effort.

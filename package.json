@@ -1,11 +1,16 @@
 {
-  "name": "claude-handoff",
+  "name": "@neoacar/claude-handoff",
   "version": "0.1.0",
   "description": "Make Claude Code session context portable between machines via git",
   "type": "module",
   "bin": {
     "claude-handoff": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -13,11 +18,31 @@
     "test:watch": "vitest",
     "test:fixtures": "vitest run --config vitest.config.ts test/fixtures",
     "lint": "prettier --check . && tsc --noEmit",
-    "lint:fix": "prettier --write ."
+    "lint:fix": "prettier --write .",
+    "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NeoAcar/claude-handoff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NeoAcar/claude-handoff/issues"
+  },
+  "homepage": "https://github.com/NeoAcar/claude-handoff#readme",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "cli",
+    "session",
+    "handoff",
+    "git",
+    "portable",
+    "context"
+  ],
+  "author": "NeoAcar",
   "license": "MIT",
   "dependencies": {
     "commander": "^13.1.0"

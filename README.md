@@ -25,13 +25,19 @@ Alice's sessions appear in Neo's `/resume` picker with their original titles and
 ## Install
 
 ```bash
-# Local development (from repo)
+npm install -g @neoacar/claude-handoff
+```
+
+Then run `claude-handoff` from any project directory.
+
+### From source (for development)
+
+```bash
+git clone https://github.com/NeoAcar/claude-handoff
+cd claude-handoff
 npm install
 npm run build
-npm link
-
-# Or run directly
-node dist/cli.js <command>
+npm link            # makes `claude-handoff` available globally
 ```
 
 ## Commands
