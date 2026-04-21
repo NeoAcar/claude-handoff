@@ -66,8 +66,14 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   // Ensure target directory exists
   await mkdir(slugDir, { recursive: true });
 
+  // Conflict policy: if a session with the same ID already exists locally,
+  // skip it by default (non-destructive). `--overwrite` replaces the local
+  // copy. A future `--force` could also be used to merge forks, but for now
+  // a skip-or-overwrite binary is enough and matches the export side's
+  // "already exported" check.
   let importedCount = 0;
   let skippedCount = 0;
+  let overwrittenCount = 0;
 
   for (const sessionFile of sessionFiles) {
     const meta = await extractSessionMeta(sessionFile);
@@ -80,10 +86,13 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
       .catch(() => false);
     if (exists && !options.overwrite) {
       console.log(
-        `  Skipping ${meta.sessionId} (already exists locally, use --overwrite to replace)`,
+        `  Skipping ${meta.sessionId} (already exists locally — rerun with --overwrite to replace)`,
       );
       skippedCount++;
       continue;
+    }
+    if (exists && options.overwrite) {
+      overwrittenCount++;
     }
 
     // Transform: portable placeholders → local paths
@@ -103,8 +112,13 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   }
 
   console.log(`\nImported ${importedCount} session(s)`);
+  if (overwrittenCount > 0) {
+    console.log(`  ${overwrittenCount} local session(s) replaced via --overwrite`);
+  }
   if (skippedCount > 0) {
-    console.log(`Skipped ${skippedCount} (already existed)`);
+    console.log(
+      `Skipped ${skippedCount} (already existed locally — rerun with --overwrite to replace)`,
+    );
   }
   console.log('Open Claude Code and use /resume to see imported sessions.');
 }

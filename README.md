@@ -62,6 +62,12 @@ node dist/cli.js <command>
 --overwrite       Replace existing local sessions with same ID
 ```
 
+**Conflict behavior.** If a shared session has the same ID as one already in
+your local `~/.claude/projects/<slug>/`, the default is to **skip** it and
+report the collision. Pass `--overwrite` to replace the local copy. The
+summary at the end of `import` reports how many sessions were imported,
+overwritten, or skipped.
+
 ## What it does
 
 1. **Path rewriting** — Absolute paths (`/home/alice/project/...`) become portable placeholders (`{{PROJECT_ROOT}}/...`) on export, then get rewritten to Neo's paths on import.
