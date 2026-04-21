@@ -37,39 +37,36 @@ Smoke-tested on two real projects on disk.
 - [x] `export.ts`, `import.ts`, `status.ts` use `store.ts`.
 - [x] 30 tests in `store.test.ts`; `paths.test.ts` trimmed to 38.
 
-### Phase 3B — Bundle manifest (session = main transcript + artifacts)
+### Phase 3B — Bundle manifest (session = main transcript + artifacts) ✅
 
-- [ ] Extend `src/core/manifest.ts`:
-  - Bump schema version to `0.2.0`
-  - `ManifestEntry` gets `artifacts: BundleArtifact[]` (optional for
-    back-compat read of `0.1.0` manifests)
-  - `BundleArtifact { kind: 'transcript' | 'subagent' | 'remote-agent' | 'session-memory', exportedPath: string, originalRelativePath: string, recordCount?, redactionHits? }`
-  - On read of a `0.1.0` manifest, synthesize a single-artifact entry
-    per session so status/list keep working
-- [ ] New on-disk layout under `.claude-shared/sessions/`:
-  - Main: `<timestamp>_<author>_<sid>.jsonl` (unchanged for
-    back-compat)
-  - Sidecars: `<sid>.sidecars/{subagents,remote-agents,session-memory}/...`
-  - This mixes flat + nested deliberately: the flat main transcript
-    keeps `ls` and `git log` human-readable; sidecars sit alongside
-    when present.
+- [x] Manifest schema bumped to v2. `ManifestEntry` now carries an
+      `artifacts: BundleArtifact[]` array and richer metadata (title,
+      timestamps, source project root, malformed/recovered/skipped
+      counts). v1 manifests auto-migrate on load via `migrateV1`, so
+      older `.claude-shared/` folders keep working read-only.
+- [x] On-disk layout: directory-per-session
+      (`.claude-shared/sessions/<sessionId>/`) with `main.jsonl`,
+      `metadata.json`, and nested sidecar dirs. The old flat layout is
+      still readable on import via the v1 synthetic-entry path.
 
-### Phase 3C — Collect subagents and session-memory
+### Phase 3C — Collect subagents and session-memory ✅
 
-- [ ] `store.ts:collectSessionArtifacts(sessionFile): Promise<Artifact[]>`:
-  - Look for `<store>/<sessionId>/subagents/*.jsonl` and
-    `*.meta.json`
-  - Look for `<store>/<sessionId>/remote-agents/*.jsonl`
-  - Look for `<store>/<sessionId>/session-memory/summary.md`
-- [ ] `export.ts` iterates artifacts, applies the same
-      path-rewrite + redaction pipeline per file type:
-  - `.jsonl` → streaming transform (existing code)
-  - `.md`, `.json` → buffered read, redact + path-rewrite, write
-- [ ] `import.ts` reconstructs the bundle dir under the user's local
-      Claude store
-- [ ] Fixture: synthetic session with a subagent + session-memory
-      sidecar, round-trip test in `scripts/roundtrip-test.sh`
-- [ ] Docs: HOW_IT_WORKS.md gets a "session bundle" subsection
+- [x] `store.ts:collectSessionArtifacts(mainTranscriptPath)` walks the
+      session's sidecar directory and classifies subagent transcripts,
+      subagent meta sidecars, remote-agent transcripts, and
+      session-memory markdown.
+- [x] `export.ts` iterates artifacts, running the same path-rewrite + redaction pipeline per type (streaming for JSONL, buffered
+      deep-walk for JSON, buffered string transform for markdown).
+- [x] `import.ts` reconstructs the bundle dir under Neo's local
+      Claude store, mapping the main transcript to
+      `<store>/<sid>.jsonl` and sidecars to `<store>/<sid>/...`.
+- [x] Synthetic fixture under `test/fixtures/bundled/` with main
+      transcript + subagent + subagent meta + session-memory.
+- [x] Integration tests in `test/integration/bundle-roundtrip.test.ts`
+      covering full Alice→Neo round-trip with all four artifact kinds.
+      Validated against a real session on disk that has 8 subagent
+      sidecars (Hedgehogs project). 119 tests pass.
+- [ ] Docs: HOW_IT_WORKS.md "session bundle" subsection — follow-up.
 
 ### Phase 3D — Repo memory (explicit opt-in)
 

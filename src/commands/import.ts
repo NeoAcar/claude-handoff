@@ -1,17 +1,33 @@
 /**
  * claude-handoff import — Neo's command.
  *
- * Copies session files from .claude-shared/sessions/ into ~/.claude/projects/<slug>/,
- * with portable placeholders rewritten to Neo's local paths.
+ * Reads session bundles from .claude-shared/sessions/<sessionId>/ and
+ * reconstructs them under ~/.claude/projects/<local-store>/, translating
+ * portable placeholders back into Neo's real paths.
+ *
+ * Bundle layout (written by v0.2.0+ export):
+ *   .claude-shared/sessions/<sid>/
+ *     main.jsonl            → <localStore>/<sid>.jsonl
+ *     metadata.json         → (not copied — consumed by this command)
+ *     subagents/<x>.jsonl   → <localStore>/<sid>/subagents/<x>.jsonl
+ *     subagents/<x>.meta.json → same
+ *     remote-agents/<x>.jsonl → same
+ *     session-memory/<x>.md → same
+ *
+ * Legacy v0.1.0 flat layout is auto-migrated on manifest read; main
+ * transcripts that sit flat under .claude-shared/sessions/ are still
+ * reconstructed correctly.
  */
 
-import { mkdir, access } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
 import { getOrComputeStoreDir } from '../core/store.js';
 import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
+import { readManifest } from '../core/manifest.js';
+import type { BundleArtifact, ManifestEntry } from '../core/manifest.js';
 
 export interface ImportOptions {
   dryRun: boolean;
@@ -29,79 +45,116 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   const sharedDir = path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
 
-  // Find shared session files
-  let sessionFiles = await listSessionFiles(sessionsDir);
-  if (sessionFiles.length === 0) {
+  // Read the manifest; readManifest auto-migrates v0.1.0 → v0.2.0 so we
+  // can treat every entry as if it has a bundle + artifacts list.
+  const manifest = await readManifest(sharedDir);
+
+  // Build the list of sessions to import.
+  let entries: ManifestEntry[];
+  if (manifest && manifest.sessions.length > 0) {
+    entries = manifest.sessions;
+  } else {
+    // Fallback: no manifest (or empty). Treat every top-level .jsonl under
+    // .claude-shared/sessions/ as a flat legacy import.
+    entries = await synthesizeEntriesFromDir(sessionsDir);
+  }
+
+  if (entries.length === 0) {
     console.log('No shared sessions found in .claude-shared/sessions/');
     console.log('Has someone run `claude-handoff export` and committed the result?');
     return;
   }
 
-  // Apply filters
+  // Apply --session filter (matches by sessionId prefix).
   if (options.session) {
-    sessionFiles = sessionFiles.filter((f) => path.basename(f).includes(options.session!));
-    if (sessionFiles.length === 0) {
+    entries = entries.filter((e) => e.sessionId.startsWith(options.session!));
+    if (entries.length === 0) {
       throw new Error(`No session matching "${options.session}" found.`);
     }
   }
 
   // Dry-run mode
   if (options.dryRun) {
-    console.log(`Would import ${sessionFiles.length} session(s) into:\n  ${slugDir}\n`);
-    for (const f of sessionFiles) {
-      const meta = await extractSessionMeta(f);
-      const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-      console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records)`);
+    console.log(`Would import ${entries.length} session(s) into:\n  ${slugDir}\n`);
+    for (const e of entries) {
+      const sidecars = e.artifacts.filter((a) => a.kind !== 'transcript').length;
+      const title = e.title ?? '(untitled)';
+      const sidecarNote = sidecars > 0 ? ` + ${sidecars} sidecar(s)` : '';
+      console.log(`  ${e.sessionId} — ${title}${sidecarNote}`);
     }
     console.log('\nRun without --dry-run to import.');
     return;
   }
 
-  // Ensure target directory exists
   await mkdir(slugDir, { recursive: true });
 
-  // Conflict policy: if a session with the same ID already exists locally,
-  // skip it by default (non-destructive). `--overwrite` replaces the local
-  // copy. A future `--force` could also be used to merge forks, but for now
-  // a skip-or-overwrite binary is enough and matches the export side's
-  // "already exported" check.
+  // Conflict policy: skip a session if its main transcript already exists
+  // locally, unless --overwrite is set. `--force`-style merge is future work.
   let importedCount = 0;
   let skippedCount = 0;
   let overwrittenCount = 0;
 
-  for (const sessionFile of sessionFiles) {
-    const meta = await extractSessionMeta(sessionFile);
-    const outputFilename = `${meta.sessionId}.jsonl`;
-    const outputPath = path.join(slugDir, outputFilename);
+  const rewriteString = (s: string) => portableToLocal(s, projectRoot, localHome);
 
-    // Check if already exists locally
-    const exists = await access(outputPath)
-      .then(() => true)
-      .catch(() => false);
-    if (exists && !options.overwrite) {
+  for (const entry of entries) {
+    const sessionId = entry.sessionId;
+    const localMainPath = path.join(slugDir, `${sessionId}.jsonl`);
+
+    const mainExists = await pathExists(localMainPath);
+    if (mainExists && !options.overwrite) {
       console.log(
-        `  Skipping ${meta.sessionId} (already exists locally — rerun with --overwrite to replace)`,
+        `  Skipping ${sessionId} (already exists locally — rerun with --overwrite to replace)`,
       );
       skippedCount++;
       continue;
     }
-    if (exists && options.overwrite) {
+    if (mainExists && options.overwrite) {
       overwrittenCount++;
     }
 
-    // Transform: portable placeholders → local paths
-    const { count, stats } = await transformSession(sessionFile, outputPath, (record) => {
-      return deepRewrite(record, (s) =>
-        portableToLocal(s, projectRoot, localHome),
-      ) as SessionRecord;
-    });
+    // Resolve the per-artifact source base on the shared side. v1-migrated
+    // entries have `legacyExportedFilename` set and sit flat under
+    // sessionsDir; v2 bundles live under sessionsDir/<sessionId>/.
+    const isLegacy = Boolean(entry.legacyExportedFilename);
+    const sourceBase = isLegacy ? sessionsDir : path.join(sessionsDir, sessionId);
 
-    const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-    let suffix = '';
-    if (stats.recoveredLines > 0 || stats.skippedLines > 0) {
-      suffix = ` [recovered ${stats.recoveredLines}, skipped ${stats.skippedLines}]`;
+    let importedArtifacts = 0;
+    let sidecarCount = 0;
+    for (const artifact of entry.artifacts) {
+      const src = path.join(sourceBase, artifact.bundlePath);
+      if (!(await pathExists(src))) {
+        console.warn(
+          `  Warning: skipping missing artifact ${artifact.bundlePath} for ${sessionId}`,
+        );
+        continue;
+      }
+
+      const dst = importDestination(slugDir, sessionId, artifact);
+      await mkdir(path.dirname(dst), { recursive: true });
+
+      if (src.endsWith('.jsonl')) {
+        await transformSession(src, dst, (record) => {
+          return deepRewrite(record, rewriteString) as SessionRecord;
+        });
+      } else if (src.endsWith('.json')) {
+        const raw = await readFile(src, 'utf-8');
+        const parsed = JSON.parse(raw) as unknown;
+        const rewritten = deepRewrite(parsed, rewriteString);
+        await writeFile(dst, JSON.stringify(rewritten, null, 2) + '\n', 'utf-8');
+      } else {
+        const content = await readFile(src, 'utf-8');
+        await writeFile(dst, rewriteString(content), 'utf-8');
+      }
+
+      importedArtifacts++;
+      if (artifact.kind !== 'transcript') sidecarCount++;
     }
-    console.log(`  Imported: ${outputFilename} — ${title} (${count} records)${suffix}`);
+
+    const title = entry.title ?? '(untitled)';
+    const sidecarNote = sidecarCount > 0 ? ` + ${sidecarCount} sidecar(s)` : '';
+    console.log(
+      `  Imported: ${sessionId}.jsonl — ${title} (${importedArtifacts} artifact(s)${sidecarNote})`,
+    );
     importedCount++;
   }
 
@@ -115,4 +168,68 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     );
   }
   console.log('Open Claude Code and use /resume to see imported sessions.');
+}
+
+/**
+ * Map a bundle artifact to its absolute destination under the local
+ * Claude store. The main transcript lives at <store>/<sid>.jsonl; every
+ * sidecar preserves its original relative path under <store>/<sid>/.
+ */
+function importDestination(slugDir: string, sessionId: string, artifact: BundleArtifact): string {
+  if (artifact.kind === 'transcript') {
+    return path.join(slugDir, `${sessionId}.jsonl`);
+  }
+  // bundlePath for v2 sidecars == originalRelativePath (e.g. "subagents/foo.jsonl").
+  // For v1-migrated transcripts we'd never reach this branch.
+  return path.join(slugDir, sessionId, artifact.bundlePath);
+}
+
+/**
+ * No manifest was found — synthesize minimal entries from whatever
+ * top-level `.jsonl` files sit under .claude-shared/sessions/. Treats
+ * each as a legacy flat transcript with no sidecars.
+ */
+async function synthesizeEntriesFromDir(sessionsDir: string): Promise<ManifestEntry[]> {
+  const files = await listSessionFiles(sessionsDir);
+  const entries: ManifestEntry[] = [];
+  for (const file of files) {
+    let sessionId: string;
+    let title: string | undefined;
+    try {
+      const meta = await extractSessionMeta(file);
+      sessionId = meta.sessionId;
+      title = meta.customTitle ?? meta.lastPrompt;
+    } catch {
+      // File without a sessionId — skip it rather than corrupt the store.
+      continue;
+    }
+    entries.push({
+      sessionId,
+      author: 'unknown',
+      exportedAt: 'unknown',
+      title,
+      totalRedactionHits: 0,
+      totalMalformed: 0,
+      totalRecovered: 0,
+      totalSkipped: 0,
+      legacyExportedFilename: path.basename(file),
+      artifacts: [
+        {
+          kind: 'transcript',
+          bundlePath: path.basename(file),
+          originalRelativePath: '',
+        },
+      ],
+    });
+  }
+  return entries;
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
 }

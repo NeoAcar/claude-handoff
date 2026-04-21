@@ -137,6 +137,95 @@ export async function listProjectSessionFiles(projectRoot: string): Promise<stri
 }
 
 /**
+ * A single file inside a session's sidecar directory on the source
+ * machine. Used as the input to the export pipeline's artifact loop.
+ */
+export interface SourceArtifact {
+  kind: 'subagent' | 'subagent-meta' | 'remote-agent' | 'session-memory';
+  /** Absolute path to the file on disk. */
+  sourcePath: string;
+  /** Path relative to `<storeDir>/<sessionId>/`, e.g. "subagents/foo.jsonl". */
+  relativePath: string;
+}
+
+/**
+ * Collect all sidecar artifacts that live beside a session's main
+ * transcript: subagent transcripts and their meta sidecars, remote-agent
+ * transcripts, and session-memory markdown. Returns an empty array if
+ * the session has no sidecar directory.
+ */
+export async function collectSessionArtifacts(
+  mainTranscriptPath: string,
+): Promise<SourceArtifact[]> {
+  const dir = path.dirname(mainTranscriptPath);
+  const sessionId = path.basename(mainTranscriptPath, '.jsonl');
+  const sidecarDir = path.join(dir, sessionId);
+
+  try {
+    const stats = await stat(sidecarDir);
+    if (!stats.isDirectory()) return [];
+  } catch {
+    return [];
+  }
+
+  const results: SourceArtifact[] = [];
+  await walkSidecars(sidecarDir, sidecarDir, results);
+  return results;
+}
+
+async function walkSidecars(
+  current: string,
+  sidecarRoot: string,
+  out: SourceArtifact[],
+): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(current);
+  } catch {
+    return;
+  }
+
+  for (const name of entries) {
+    const fullPath = path.join(current, name);
+    let entryStat;
+    try {
+      entryStat = await stat(fullPath);
+    } catch {
+      continue;
+    }
+
+    if (entryStat.isDirectory()) {
+      await walkSidecars(fullPath, sidecarRoot, out);
+      continue;
+    }
+    if (!entryStat.isFile()) continue;
+
+    const relativePath = path.relative(sidecarRoot, fullPath).split(path.sep).join('/');
+    const kind = classifySidecar(relativePath);
+    if (kind === null) continue;
+
+    out.push({ kind, sourcePath: fullPath, relativePath });
+  }
+}
+
+function classifySidecar(
+  relativePath: string,
+): 'subagent' | 'subagent-meta' | 'remote-agent' | 'session-memory' | null {
+  if (relativePath.startsWith('subagents/')) {
+    if (relativePath.endsWith('.jsonl')) return 'subagent';
+    if (relativePath.endsWith('.meta.json')) return 'subagent-meta';
+    return null;
+  }
+  if (relativePath.startsWith('remote-agents/') && relativePath.endsWith('.jsonl')) {
+    return 'remote-agent';
+  }
+  if (relativePath.startsWith('session-memory/')) {
+    return 'session-memory';
+  }
+  return null;
+}
+
+/**
  * Resolve a `sessionId` to its main transcript file.
  *
  * If `projectRoot` is provided, look only inside that project's store

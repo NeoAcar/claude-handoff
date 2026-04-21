@@ -37,8 +37,14 @@ export async function listCommand(projectRoot: string, options: ListOptions): Pr
       if (entry) {
         console.log(`         author: ${entry.author}`);
         console.log(`         exported: ${entry.exportedAt}`);
-        if (entry.redactionHits > 0) {
-          console.log(`         redaction markers: ${entry.redactionHits}`);
+        if (entry.totalRedactionHits > 0) {
+          console.log(`         redaction markers: ${entry.totalRedactionHits}`);
+        }
+        if (entry.artifacts.length > 1) {
+          const sidecarKinds = entry.artifacts.filter((a) => a.kind !== 'transcript');
+          console.log(
+            `         sidecars: ${sidecarKinds.length} (${sidecarKinds.map((a) => a.kind).join(', ')})`,
+          );
         }
       }
       if (meta.firstTimestamp && meta.lastTimestamp) {

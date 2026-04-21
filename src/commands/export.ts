@@ -1,25 +1,37 @@
 /**
  * claude-handoff export — Alice's command.
  *
- * Copies session files from ~/.claude/projects/<slug>/ into .claude-shared/sessions/,
- * with paths rewritten to portable placeholders and secrets redacted.
+ * Packages each local session as a bundle directory under
+ * .claude-shared/sessions/<sessionId>/, containing:
+ *   main.jsonl            — streamed + transformed main transcript
+ *   metadata.json         — author, exportedAt, title, timestamps
+ *   subagents/*.jsonl     — per-subagent transcripts (if any)
+ *   subagents/*.meta.json — per-subagent metadata sidecars (if any)
+ *   remote-agents/*.jsonl — per-remote-agent transcripts (if any)
+ *   session-memory/*      — session-memory markdown (if any)
+ *
+ * Every artifact runs through the same path-rewrite + redaction
+ * pipeline as the main transcript, adapted to the artifact type
+ * (streaming for JSONL, buffered for JSON/markdown).
  */
 
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { localToPortable, deepRewrite } from '../core/paths.js';
 import {
+  collectSessionArtifacts,
   findProjectStoreDir,
   getClaudeProjectsDir,
   listProjectSessionFiles,
 } from '../core/store.js';
+import type { SourceArtifact } from '../core/store.js';
 import { extractSessionMeta, transformSession } from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
-import { deepRedact, parseCustomPatterns } from '../core/redactor.js';
+import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
-import type { ManifestEntry } from '../core/manifest.js';
+import type { BundleArtifact, ManifestEntry } from '../core/manifest.js';
 
 export interface ExportOptions {
   dryRun: boolean;
@@ -108,8 +120,10 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     console.log(`Would export ${sessionFiles.length} session(s) as "${author}":\n`);
     for (const f of sessionFiles) {
       const meta = await extractSessionMeta(f);
+      const sidecars = await collectSessionArtifacts(f);
       const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
-      console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records)`);
+      const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
+      console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
     }
     console.log('\nRun without --dry-run to export.');
     return;
@@ -129,7 +143,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     );
   }
 
-  // Read or create manifest
+  // Read or create manifest. readManifest auto-migrates v1 → v2 on load
+  // so older .claude-shared/ folders keep working.
   let manifest = await readManifest(sharedDir);
   if (!manifest) {
     manifest = createEmptyManifest('0.1.0');
@@ -144,77 +159,173 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     totalSkipped: 0,
   };
 
+  const rewriteString = (s: string) => localToPortable(s, projectRoot, localHome);
+
   for (const sessionFile of sessionFiles) {
     const meta = await extractSessionMeta(sessionFile);
-
-    // Build export filename: timestamp_author_session-id.jsonl
-    const ts = meta.firstTimestamp
-      ? meta.firstTimestamp.replace(/[:.]/g, '-').slice(0, 19)
-      : new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const exportFilename = `${ts}_${author}_${meta.sessionId}.jsonl`;
-    const outputPath = path.join(sessionsDir, exportFilename);
+    const sessionId = meta.sessionId;
 
     // Check if already exported
-    const alreadyExported = manifest.sessions.some((s) => s.sessionId === meta.sessionId);
+    const alreadyExported = manifest.sessions.some((s) => s.sessionId === sessionId);
     if (alreadyExported) {
-      console.log(`  Skipping ${meta.sessionId} (already exported)`);
+      console.log(`  Skipping ${sessionId} (already exported)`);
       continue;
     }
 
-    // Transform: path rewrite + optional redaction
-    let sessionHits: RedactionHit[] = [];
+    const bundleDir = path.join(sessionsDir, sessionId);
+    await mkdir(bundleDir, { recursive: true });
 
+    const sessionHits: RedactionHit[] = [];
+    const artifacts: BundleArtifact[] = [];
+
+    // --- Main transcript ---
     let strippedProgress = 0;
-    const { count, stats } = await transformSession(sessionFile, outputPath, (record) => {
-      // Optionally drop streaming progress records — they're ~half of
-      // records in a big session but not needed to restore context.
+    const mainBundlePath = 'main.jsonl';
+    const mainDest = path.join(bundleDir, mainBundlePath);
+    const mainTransform = await transformSession(sessionFile, mainDest, (record) => {
       if (options.stripProgress && record.type === 'progress') {
         strippedProgress++;
         return null;
       }
-
-      // Path rewrite
-      let rewritten = deepRewrite(record, (s) =>
-        localToPortable(s, projectRoot, localHome),
-      ) as SessionRecord;
-
-      // Redaction
+      let rewritten = deepRewrite(record, rewriteString) as SessionRecord;
       if (!options.noRedact) {
         const { value, hits } = deepRedact(rewritten, customPatterns);
         rewritten = value as SessionRecord;
         sessionHits.push(...hits);
       }
-
       return rewritten;
     });
 
-    const entry: ManifestEntry = {
-      sessionId: meta.sessionId,
-      originalFilename: path.basename(sessionFile),
-      exportedFilename: exportFilename,
+    const mainSize = await fileSize(mainDest);
+    const mainRedactionHitsBefore = 0; // tracked via sessionHits above
+    artifacts.push({
+      kind: 'transcript',
+      bundlePath: mainBundlePath,
+      originalRelativePath: '',
+      recordCount: mainTransform.count,
+      redactionHits: sessionHits.length - mainRedactionHitsBefore,
+      bytes: mainSize,
+    });
+    result.totalMalformed += mainTransform.stats.malformedLines;
+    result.totalRecovered += mainTransform.stats.recoveredLines;
+    result.totalSkipped += mainTransform.stats.skippedLines;
+
+    // --- Sidecars (subagents, remote-agents, session-memory) ---
+    const sidecarSources = await collectSessionArtifacts(sessionFile);
+    for (const src of sidecarSources) {
+      const bundlePath = src.relativePath;
+      const dest = path.join(bundleDir, bundlePath);
+      await mkdir(path.dirname(dest), { recursive: true });
+
+      if (bundlePath.endsWith('.jsonl')) {
+        const hitsBefore = sessionHits.length;
+        const sideTransform = await transformSession(src.sourcePath, dest, (record) => {
+          if (options.stripProgress && record.type === 'progress') {
+            strippedProgress++;
+            return null;
+          }
+          let rewritten = deepRewrite(record, rewriteString) as SessionRecord;
+          if (!options.noRedact) {
+            const { value, hits } = deepRedact(rewritten, customPatterns);
+            rewritten = value as SessionRecord;
+            sessionHits.push(...hits);
+          }
+          return rewritten;
+        });
+        artifacts.push({
+          kind: src.kind === 'subagent' ? 'subagent' : 'remote-agent',
+          bundlePath,
+          originalRelativePath: src.relativePath,
+          recordCount: sideTransform.count,
+          redactionHits: sessionHits.length - hitsBefore,
+          bytes: await fileSize(dest),
+        });
+        result.totalMalformed += sideTransform.stats.malformedLines;
+        result.totalRecovered += sideTransform.stats.recoveredLines;
+        result.totalSkipped += sideTransform.stats.skippedLines;
+      } else if (bundlePath.endsWith('.json')) {
+        const hitsBefore = sessionHits.length;
+        await transformJsonFile(src.sourcePath, dest, {
+          rewriteString,
+          redact: !options.noRedact,
+          customPatterns,
+          onHits: (hits) => sessionHits.push(...hits),
+        });
+        artifacts.push({
+          kind: 'subagent-meta',
+          bundlePath,
+          originalRelativePath: src.relativePath,
+          redactionHits: sessionHits.length - hitsBefore,
+          bytes: await fileSize(dest),
+        });
+      } else {
+        // markdown or any other text file
+        const hitsBefore = sessionHits.length;
+        await transformTextFile(src.sourcePath, dest, {
+          rewriteString,
+          redact: !options.noRedact,
+          customPatterns,
+          onHits: (hits) => sessionHits.push(...hits),
+        });
+        artifacts.push({
+          kind: 'session-memory',
+          bundlePath,
+          originalRelativePath: src.relativePath,
+          redactionHits: sessionHits.length - hitsBefore,
+          bytes: await fileSize(dest),
+        });
+      }
+    }
+
+    // --- Per-bundle metadata sidecar ---
+    const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+    const metadataPayload = {
+      sessionId,
       author,
       exportedAt: new Date().toISOString(),
-      recordCount: count,
-      redactionHits: sessionHits.length,
+      title,
+      firstTimestamp: meta.firstTimestamp,
+      lastTimestamp: meta.lastTimestamp,
+      sourceProjectRoot: projectRoot,
+      strippedProgress,
+    };
+    const metadataPath = path.join(bundleDir, 'metadata.json');
+    await writeFile(metadataPath, JSON.stringify(metadataPayload, null, 2) + '\n', 'utf-8');
+
+    // --- Manifest entry ---
+    const entry: ManifestEntry = {
+      sessionId,
+      author,
+      exportedAt: metadataPayload.exportedAt,
+      sourceProjectRoot: projectRoot,
+      title,
+      firstTimestamp: meta.firstTimestamp,
+      lastTimestamp: meta.lastTimestamp,
+      totalRedactionHits: sessionHits.length,
+      totalMalformed: mainTransform.stats.malformedLines,
+      totalRecovered: mainTransform.stats.recoveredLines,
+      totalSkipped: mainTransform.stats.skippedLines,
+      artifacts,
     };
 
     manifest.sessions.push(entry);
     result.exported.push(entry);
     result.totalRedactionHits += sessionHits.length;
     result.allHits.push(...sessionHits);
-    result.totalMalformed += stats.malformedLines;
-    result.totalRecovered += stats.recoveredLines;
-    result.totalSkipped += stats.skippedLines;
 
-    const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+    // --- Console line ---
+    const sidecarCount = artifacts.length - 1;
     let suffix = '';
-    if (stats.recoveredLines > 0 || stats.skippedLines > 0) {
-      suffix = ` [recovered ${stats.recoveredLines}, skipped ${stats.skippedLines}]`;
+    if (mainTransform.stats.recoveredLines > 0 || mainTransform.stats.skippedLines > 0) {
+      suffix = ` [recovered ${mainTransform.stats.recoveredLines}, skipped ${mainTransform.stats.skippedLines}]`;
     }
     if (strippedProgress > 0) {
       suffix += ` [stripped ${strippedProgress} progress]`;
     }
-    console.log(`  Exported: ${exportFilename} — ${title} (${count} records)${suffix}`);
+    const sidecarNote = sidecarCount > 0 ? ` + ${sidecarCount} sidecar(s)` : '';
+    console.log(
+      `  Exported: ${sessionId}/ — ${title} (${mainTransform.count} records${sidecarNote})${suffix}`,
+    );
   }
 
   // Write manifest
@@ -263,6 +374,55 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     );
   }
   console.log('Before committing, run: git diff .claude-shared/');
+}
+
+// --- Artifact transform helpers (buffered — for small text files) ---
+
+interface TransformCtx {
+  rewriteString: (s: string) => string;
+  redact: boolean;
+  customPatterns: RedactionPattern[];
+  onHits: (hits: RedactionHit[]) => void;
+}
+
+/**
+ * Read a JSON file, walk every string value through path rewriting +
+ * redaction, write the result back out. Used for `<sid>/subagents/*.meta.json`.
+ */
+async function transformJsonFile(src: string, dst: string, ctx: TransformCtx): Promise<void> {
+  const raw = await readFile(src, 'utf-8');
+  const parsed = JSON.parse(raw) as unknown;
+  let rewritten = deepRewrite(parsed, ctx.rewriteString);
+  if (ctx.redact) {
+    const { value, hits } = deepRedact(rewritten, ctx.customPatterns);
+    rewritten = value;
+    ctx.onHits(hits);
+  }
+  await writeFile(dst, JSON.stringify(rewritten, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * Read a text file (markdown, plain text), rewrite paths + redact, write.
+ * Used for session-memory/*.md.
+ */
+async function transformTextFile(src: string, dst: string, ctx: TransformCtx): Promise<void> {
+  let content = await readFile(src, 'utf-8');
+  content = ctx.rewriteString(content);
+  if (ctx.redact) {
+    const { text, hits } = redactText(content, ctx.customPatterns);
+    content = text;
+    ctx.onHits(hits);
+  }
+  await writeFile(dst, content, 'utf-8');
+}
+
+async function fileSize(p: string): Promise<number> {
+  try {
+    const s = await stat(p);
+    return s.size;
+  } catch {
+    return 0;
+  }
 }
 
 /**

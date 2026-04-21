@@ -1,0 +1,8 @@
+{
+  "agentId": "agent-explore-abc",
+  "subagentType": "Explore",
+  "cwd": "/fake/user/fake-project",
+  "startedAt": "2026-03-23T14:24:23Z",
+  "endedAt": "2026-03-23T14:24:40Z",
+  "summary": "Surveyed /fake/user/fake-project — found README.md at the root."
+}
