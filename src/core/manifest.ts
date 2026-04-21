@@ -59,6 +59,31 @@ export interface ManifestEntry {
   totalSkipped: number;
   artifacts: BundleArtifact[];
 
+  // --- Iteration-support fields (added for 0.2.0).
+  /**
+   * mtime of the local `<sid>.jsonl` source file at export time, in ms
+   * since epoch. Used to detect whether the session has changed since
+   * the last export. On import we `utimes()` the destination file back
+   * to this value so this field remains the authoritative equality
+   * signal across the handoff.
+   */
+  sourceMtimeMs?: number;
+  /**
+   * Record count of the source file at export time (not the count
+   * written to the bundle — those can differ when --strip-progress
+   * drops records). Used alongside `sourceMtimeMs` for fork detection:
+   * if a local session has FEWER records than the shared bundle, that
+   * usually means teammate work is about to be overwritten.
+   */
+  sourceRecordCount?: number;
+  /**
+   * Prior export rounds for this session ID, oldest first. Each
+   * round is moved here when the entry gets rewritten during an
+   * iterative re-export. Lets `status` / `list` show "round N,
+   * most recent by X at T".
+   */
+  previousExports?: Array<{ author: string; exportedAt: string }>;
+
   // --- v1 legacy fields, kept only so a v1 manifest round-trips without loss.
   // Never populated on new exports; may exist when we loaded an old manifest
   // and haven't rewritten it yet.

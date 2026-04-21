@@ -11,7 +11,7 @@ ranges that shipped them; git history has the details.
 
 - [ ] **Sequential iteration for the same session ID.** Today
       `export` skips a session as soon as its ID appears in the
-      manifest, which means the Alice→Bob→Alice→Bob cycle on *one*
+      manifest, which means the Alice→Bob→Alice→Bob cycle on _one_
       session is effectively one-shot — Bob's continuation never
       makes it back into the bundle. Fix is small (~40 lines):
       in `src/commands/export.ts`, replace the "already exported"
