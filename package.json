@@ -4,7 +4,7 @@
   "description": "Make Claude Code session context portable between machines via git",
   "type": "module",
   "bin": {
-    "claude-handoff": "./dist/cli.js"
+    "claude-handoff": "dist/cli.js"
   },
   "files": [
     "dist",
