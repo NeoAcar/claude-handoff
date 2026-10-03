@@ -59,6 +59,8 @@ export interface ManifestEntry {
   totalRecovered: number;
   totalSkipped: number;
   artifacts: BundleArtifact[];
+  /** claude-handoff version that wrote this bundle. Absent before 0.2.2. */
+  exportedWith?: string;
 
   // --- Iteration-support fields (added for 0.2.0).
   /**

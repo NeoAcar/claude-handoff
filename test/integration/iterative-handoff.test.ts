@@ -34,7 +34,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { exportCommand } from '../../src/commands/export.js';
 import { importCommand } from '../../src/commands/import.js';
-import { readManifest } from '../../src/core/manifest.js';
+import { readManifest, writeManifest } from '../../src/core/manifest.js';
+import { TOOL_VERSION } from '../../src/core/version.js';
 import { sanitizeProjectKey } from '../../src/core/store.js';
 
 const SESSION_ID = 'iter-aaaa-bbbb-cccc-ddddeeeeffff';
@@ -210,6 +211,30 @@ describe('iterative handoff', () => {
     expect(entry.exportedAt).toBe(firstExportedAt);
     expect(entry.previousExports ?? []).toHaveLength(0);
     expect(bundleMtime2).toBe(bundleMtime1);
+  });
+
+  it('rewrites an unchanged session whose bundle came from an older version', async () => {
+    const alice = await makeProject('alice-refresh');
+    await seedSession(alice.storeDir, alice.project, 5);
+    process.env.HOME = alice.home;
+    const opts = { dryRun: false, noRedact: true, iKnowWhatImDoing: true };
+    await exportCommand(alice.project, opts);
+
+    // Make the manifest look like one written before bundles were stamped.
+    const sharedDir = join(alice.project, '.claude-shared');
+    const manifest = (await readManifest(sharedDir))!;
+    expect(manifest.sessions[0].exportedWith).toBe(TOOL_VERSION);
+    const firstExportedAt = manifest.sessions[0].exportedAt;
+    delete manifest.sessions[0].exportedWith;
+    await writeManifest(sharedDir, manifest);
+
+    await new Promise((r) => setTimeout(r, 10));
+    await exportCommand(alice.project, opts);
+
+    const entry = (await readManifest(sharedDir))!.sessions[0];
+    expect(entry.exportedWith).toBe(TOOL_VERSION);
+    expect(entry.exportedAt).not.toBe(firstExportedAt);
+    expect(entry.previousExports).toHaveLength(1);
   });
 
   it('refuses to re-export when local has fewer records than the shared bundle (fork suspicion)', async () => {

@@ -42,7 +42,7 @@ import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
-import { TOOL_VERSION } from '../core/version.js';
+import { isOlderVersion, REFRESH_BUNDLES_BEFORE, TOOL_VERSION } from '../core/version.js';
 
 export interface ExportOptions {
   dryRun: boolean;
@@ -236,7 +236,10 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     //   entry without sourceMtimeMs   → legacy (pre-0.2.0) entry,
     //                                    treat as "needs refresh" so
     //                                    the format auto-upgrades
-    //   entry, mtime + count match    → truly unchanged, skip
+    //   entry, mtime + count match    → truly unchanged, skip — unless
+    //                                    the bundle predates
+    //                                    REFRESH_BUNDLES_BEFORE, then
+    //                                    rewrite it with current rules
     //   entry, local count < bundle   → fork suspicion, refuse unless
     //                                    --force (teammate's work
     //                                    would be overwritten)
@@ -251,8 +254,11 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       const knownCount = existing.sourceRecordCount;
       if (knownMtime !== undefined && knownCount !== undefined) {
         if (knownMtime === sourceMtimeMs && knownCount === sourceRecordCount) {
-          console.log(`  Skipping ${sessionId} (no changes since last export)`);
-          continue;
+          if (!isOlderVersion(existing.exportedWith, REFRESH_BUNDLES_BEFORE)) {
+            console.log(`  Skipping ${sessionId} (no changes since last export)`);
+            continue;
+          }
+          console.log(`  Refreshing ${sessionId} (bundle written by an older claude-handoff)`);
         }
         if (sourceRecordCount < knownCount && !options.force) {
           console.warn(
@@ -446,6 +452,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sourceMtimeMs,
       sourceRecordCount,
       artifacts,
+      exportedWith: TOOL_VERSION,
       ...(previousExportsForEntry ? { previousExports: previousExportsForEntry } : {}),
     };
 
