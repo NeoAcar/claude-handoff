@@ -28,12 +28,6 @@ ranges that shipped them; git history has the details.
       reviewers will want before pulling a PR that touches
       `.claude-shared/`.
 
-- [ ] **Re-scrub bundles from older versions.** Export skips a
-      session whose mtime + record count are unchanged, so bundles
-      written before account-identity scrubbing keep the email / org
-      UUID until the user deletes them. Record the exporter version
-      in the manifest entry and treat an older one as "needs refresh".
-
 - [ ] **`sourceProjectRoot` is an absolute path.** `metadata.json`
       and `.manifest.json` store the sender's real project root
       (home directory name included), unlike everything else in the
@@ -133,6 +127,11 @@ ranges that shipped them; git history has the details.
 ---
 
 ## Completed
+
+### 0.2.2 — Self-refreshing bundles
+
+Manifest entries record `exportedWith`; `export` rewrites unchanged
+sessions whose bundle predates `REFRESH_BUNDLES_BEFORE`.
 
 ### 0.2.1 — Claude Code 2.1.x compatibility
 

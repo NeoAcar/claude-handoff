@@ -4,6 +4,17 @@ All notable changes to `@neoacar/claude-handoff`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.2]
+
+### Added
+
+- **Old bundles refresh themselves.** Each manifest entry now records
+  the claude-handoff version that wrote it (`exportedWith`). `export`
+  rewrites an unchanged session when its bundle is unstamped or older
+  than the last change to what export removes, so bundles from 0.2.0
+  lose the account email / org UUID on the next export. Earlier
+  commits in git history are not affected.
+
 ## [0.2.1]
 
 Compatibility pass against Claude Code 2.1.288.
@@ -40,12 +51,6 @@ Compatibility pass against Claude Code 2.1.288.
 
 - Session titles prefer the user's custom title, then the
   auto-generated `ai-title` record, then the last prompt.
-
-### Upgrade note
-
-- Bundles written by 0.2.0 or earlier are not re-scrubbed
-  automatically (an unchanged session is skipped). Delete
-  `.claude-shared/sessions/<sessionId>/` and export again.
 
 ## [0.2.0]
 

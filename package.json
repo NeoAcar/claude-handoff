@@ -1,6 +1,6 @@
 {
   "name": "@neoacar/claude-handoff",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Make Claude Code session context portable between machines via git",
   "type": "module",
   "bin": {

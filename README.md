@@ -152,8 +152,9 @@ it in so the whole team shares the same scrub rules.
   transcript. Export learns both from the session and scrubs them
   everywhere in the bundle (`[REDACTED:account-email]`, a nil UUID),
   reported as `account-email` / `account-org` in the redaction log.
-  Bundles exported with 0.2.0 or earlier still contain them — delete
-  the bundle directory and re-export.
+  Bundles written by 0.2.0 or earlier still contain them; running
+  `export` with 0.2.2+ rewrites those bundles automatically. Anything
+  already committed stays in git history.
 - **Project store resolution.** Not a naive slug match — canonicalizes
   the project root (`realpath` + Unicode NFC) and, if the computed key
   misses, falls back to reading `cwd` fields from candidate session
