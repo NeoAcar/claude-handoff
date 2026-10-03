@@ -11,13 +11,14 @@ import { exportCommand } from './commands/export.js';
 import { importCommand } from './commands/import.js';
 import { statusCommand } from './commands/status.js';
 import { listCommand } from './commands/list.js';
+import { TOOL_VERSION } from './core/version.js';
 
 const program = new Command();
 
 program
   .name('claude-handoff')
   .description('Make Claude Code session context portable between machines via git')
-  .version('0.1.0');
+  .version(TOOL_VERSION);
 
 program
   .command('init')

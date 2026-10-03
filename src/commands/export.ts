@@ -42,6 +42,7 @@ import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
+import { TOOL_VERSION } from '../core/version.js';
 
 export interface ExportOptions {
   dryRun: boolean;
@@ -201,7 +202,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   // so older .claude-shared/ folders keep working.
   let manifest = await readManifest(sharedDir);
   if (!manifest) {
-    manifest = createEmptyManifest('0.1.0');
+    manifest = createEmptyManifest(TOOL_VERSION);
   }
 
   const result: ExportResult = {

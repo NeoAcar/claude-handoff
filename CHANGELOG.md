@@ -33,6 +33,8 @@ Compatibility pass against Claude Code 2.1.288.
 - Session titles written to `metadata.json` and `.manifest.json` now go
   through path rewriting and redaction like the transcript.
 - Symlinks inside a session's sidecar directory are no longer followed.
+- `--version` and the manifest's `toolVersion` reported `0.1.0`
+  regardless of the installed version; both now come from `package.json`.
 
 ### Changed
 
