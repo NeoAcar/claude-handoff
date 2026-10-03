@@ -27,7 +27,8 @@ export type ArtifactKind =
   | 'subagent' // per-subagent JSONL under <sid>/subagents/
   | 'subagent-meta' // per-subagent JSON sidecar under <sid>/subagents/
   | 'remote-agent' // per-remote-agent JSONL under <sid>/remote-agents/
-  | 'session-memory'; // markdown under <sid>/session-memory/
+  | 'session-memory' // markdown under <sid>/session-memory/
+  | 'tool-result'; // persisted large tool output under <sid>/tool-results/
 
 export interface BundleArtifact {
   kind: ArtifactKind;
@@ -49,7 +50,7 @@ export interface ManifestEntry {
   exportedAt: string;
   /** Canonicalized project root this session was captured in, when known. */
   sourceProjectRoot?: string;
-  /** Snapshot of customTitle or lastPrompt at export time, for human browsing. */
+  /** Snapshot of the session title (custom, AI-generated, or last prompt) at export time. */
   title?: string;
   firstTimestamp?: string;
   lastTimestamp?: string;

@@ -8,6 +8,8 @@
  */
 
 import type { SessionRecord } from './session.js';
+import { literalPattern } from './redactor.js';
+import type { RedactionPattern } from './redactor.js';
 
 interface AssistantMessage {
   content?: unknown[];
@@ -54,4 +56,66 @@ function isSignedThinkingBlock(item: unknown): boolean {
   if (typeof item !== 'object' || item === null) return false;
   const obj = item as { type?: unknown; signature?: unknown };
   return obj.type === 'thinking' && typeof obj.signature === 'string' && obj.signature.length > 0;
+}
+
+// --- Account identity ---
+
+/** Account identifiers Claude Code writes into a transcript. */
+export interface AccountIdentity {
+  emails: string[];
+  orgUuids: string[];
+}
+
+/** Stand-in for a scrubbed org UUID; keeps the field UUID-shaped. */
+export const ORG_UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+
+const EMAIL_REGEX = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
+
+/**
+ * Pull the account email and organization UUID out of the `attachment`
+ * records that carry them (observed on Claude Code 2.1.x):
+ *
+ *   attachment.type === 'session_context' → attachment.context.userEmail
+ *     (a sentence containing the signed-in account's email)
+ *   attachment.type === 'credential_org'  → attachment.organizationUuid
+ *
+ * Neither is a secret the pattern redactor would catch, but both
+ * identify the exporting account and would otherwise be committed with
+ * the bundle. Returns empty lists for any other record.
+ */
+export function extractAccountIdentity(record: SessionRecord): AccountIdentity {
+  const identity: AccountIdentity = { emails: [], orgUuids: [] };
+  if (record.type !== 'attachment') return identity;
+  const attachment = (record as { attachment?: unknown }).attachment;
+  if (typeof attachment !== 'object' || attachment === null) return identity;
+  const att = attachment as { type?: unknown; context?: unknown; organizationUuid?: unknown };
+
+  if (att.type === 'session_context' && typeof att.context === 'object' && att.context !== null) {
+    const userEmail = (att.context as { userEmail?: unknown }).userEmail;
+    if (typeof userEmail === 'string') {
+      identity.emails.push(...(userEmail.match(EMAIL_REGEX) ?? []));
+    }
+  }
+  if (
+    att.type === 'credential_org' &&
+    typeof att.organizationUuid === 'string' &&
+    att.organizationUuid.length > 0 &&
+    att.organizationUuid !== ORG_UUID_PLACEHOLDER
+  ) {
+    identity.orgUuids.push(att.organizationUuid);
+  }
+  return identity;
+}
+
+/**
+ * Turn an identity into literal redaction patterns, so the values are
+ * scrubbed wherever they appear in the bundle (the same email is also
+ * baked into the record's `rendered` text) and show up in the
+ * redaction log like any other hit.
+ */
+export function identityRedactionPatterns(identity: AccountIdentity): RedactionPattern[] {
+  return [
+    ...identity.emails.map((e) => literalPattern('account-email', e, '[REDACTED:account-email]')),
+    ...identity.orgUuids.map((o) => literalPattern('account-org', o, ORG_UUID_PLACEHOLDER)),
+  ];
 }

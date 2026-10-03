@@ -4,7 +4,7 @@
 
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
-import { listSessionFiles, extractSessionMeta } from '../core/session.js';
+import { listSessionFiles, extractSessionMeta, sessionTitle } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 
 export interface ListOptions {
@@ -27,7 +27,7 @@ export async function listCommand(projectRoot: string, options: ListOptions): Pr
   console.log(`Shared sessions (${files.length}):\n`);
   for (const f of files) {
     const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
-    const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+    const title = sessionTitle(meta) ?? '(untitled)';
     const ts = meta.firstTimestamp ? meta.firstTimestamp.slice(0, 10) : '?';
     const size = humanSize(fileStat.size);
     console.log(`  ${ts}  ${path.basename(f)}`);

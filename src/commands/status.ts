@@ -9,7 +9,7 @@ import {
   getOrComputeStoreDir,
   listProjectSessionFiles,
 } from '../core/store.js';
-import { listSessionFiles, extractSessionMeta } from '../core/session.js';
+import { listSessionFiles, extractSessionMeta, sessionTitle } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 
 export async function statusCommand(projectRoot: string): Promise<void> {
@@ -36,7 +36,7 @@ export async function statusCommand(projectRoot: string): Promise<void> {
   } else {
     for (const f of localFiles) {
       const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
-      const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+      const title = sessionTitle(meta) ?? '(untitled)';
       const size = humanSize(fileStat.size);
       const age = humanAge(fileStat.mtimeMs);
       const fresh = lastExportMs !== undefined && fileStat.mtimeMs > lastExportMs ? ' *' : '';
@@ -84,7 +84,7 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     } else {
       for (const f of sharedFiles) {
         const [meta, fileStat] = await Promise.all([extractSessionMeta(f), stat(f)]);
-        const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+        const title = sessionTitle(meta) ?? '(untitled)';
         console.log(
           `  ${path.basename(f)} — ${title} (${meta.recordCount} records, ${humanSize(fileStat.size)})`,
         );
@@ -110,7 +110,7 @@ export async function statusCommand(projectRoot: string): Promise<void> {
     if (unexported.length > 0) {
       console.log(`\nNot yet exported (${unexported.length}):`);
       for (const meta of unexported) {
-        const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+        const title = sessionTitle(meta) ?? '(untitled)';
         console.log(`  ${meta.sessionId} — ${title}`);
       }
     }

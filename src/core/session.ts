@@ -8,6 +8,8 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
+import { extractAccountIdentity } from './sanitizeRecord.js';
+import type { AccountIdentity } from './sanitizeRecord.js';
 
 // --- Types ---
 
@@ -25,11 +27,25 @@ export interface SessionMeta {
   sessionId: string;
   filePath: string;
   customTitle?: string;
+  /** Auto-generated title (`ai-title` record), written by newer Claude Code versions. */
+  aiTitle?: string;
   lastPrompt?: string;
   firstTimestamp?: string;
   lastTimestamp?: string;
   recordCount: number;
   stats: StreamStats;
+  /** Account identifiers Claude Code recorded in this transcript. */
+  identity: AccountIdentity;
+}
+
+/**
+ * Human-facing title for a session: the user's own title wins, then the
+ * auto-generated one, then the last prompt.
+ */
+export function sessionTitle(
+  meta: Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'lastPrompt'>,
+): string | undefined {
+  return meta.customTitle ?? meta.aiTitle ?? meta.lastPrompt;
 }
 
 /**
@@ -73,6 +89,19 @@ function trySplitConcatenated(line: string): SessionRecord[] | null {
     }
   }
   return records;
+}
+
+/**
+ * Does a `--session` selector pick this session? Matches a session ID
+ * prefix, or a case-insensitive substring of the title.
+ */
+export function matchesSessionSelector(
+  selector: string,
+  sessionId: string,
+  title: string | undefined,
+): boolean {
+  if (sessionId.startsWith(selector)) return true;
+  return title !== undefined && title.toLowerCase().includes(selector.toLowerCase());
 }
 
 // --- Streaming read ---
@@ -145,7 +174,10 @@ export async function readAllRecords(filePath: string): Promise<SessionRecord[]>
 export async function extractSessionMeta(filePath: string): Promise<SessionMeta> {
   let sessionId: string | undefined;
   let customTitle: string | undefined;
+  let aiTitle: string | undefined;
   let lastPrompt: string | undefined;
+  const emails = new Set<string>();
+  const orgUuids = new Set<string>();
   let firstTimestamp: string | undefined;
   let lastTimestamp: string | undefined;
   let recordCount = 0;
@@ -166,8 +198,18 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
       customTitle = (record as Record<string, unknown>).customTitle as string | undefined;
     }
 
+    if (record.type === 'ai-title') {
+      aiTitle = (record as Record<string, unknown>).aiTitle as string | undefined;
+    }
+
     if (record.type === 'last-prompt') {
       lastPrompt = (record as Record<string, unknown>).lastPrompt as string | undefined;
+    }
+
+    if (record.type === 'attachment') {
+      const found = extractAccountIdentity(record);
+      for (const e of found.emails) emails.add(e);
+      for (const o of found.orgUuids) orgUuids.add(o);
     }
   });
 
@@ -179,11 +221,13 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
     sessionId,
     filePath,
     customTitle,
+    aiTitle,
     lastPrompt,
     firstTimestamp,
     lastTimestamp,
     recordCount,
     stats,
+    identity: { emails: [...emails], orgUuids: [...orgUuids] },
   };
 }
 

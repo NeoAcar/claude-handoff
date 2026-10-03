@@ -13,6 +13,7 @@
  *     subagents/<x>.meta.json → same
  *     remote-agents/<x>.jsonl → same
  *     session-memory/<x>.md → same
+ *     tool-results/<x>      → same
  *
  * Legacy v0.1.0 flat layout is auto-migrated on manifest read; main
  * transcripts that sit flat under .claude-shared/sessions/ are still
@@ -24,7 +25,13 @@ import path from 'node:path';
 import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
 import { getMemoryDir, getOrComputeStoreDir } from '../core/store.js';
-import { listSessionFiles, extractSessionMeta, transformSession } from '../core/session.js';
+import {
+  listSessionFiles,
+  extractSessionMeta,
+  matchesSessionSelector,
+  sessionTitle,
+  transformSession,
+} from '../core/session.js';
 import type { SessionRecord } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry } from '../core/manifest.js';
@@ -65,9 +72,9 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     return;
   }
 
-  // Apply --session filter (matches by sessionId prefix).
+  // Apply --session filter (sessionId prefix or title substring).
   if (options.session) {
-    entries = entries.filter((e) => e.sessionId.startsWith(options.session!));
+    entries = entries.filter((e) => matchesSessionSelector(options.session!, e.sessionId, e.title));
     if (entries.length === 0) {
       throw new Error(`No session matching "${options.session}" found.`);
     }
@@ -91,6 +98,7 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   // Conflict policy: skip a session if its main transcript already exists
   // locally, unless --overwrite is set. `--force`-style merge is future work.
   let importedCount = 0;
+  const importedIds: string[] = [];
   let skippedCount = 0;
   let overwrittenCount = 0;
 
@@ -177,11 +185,14 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
       const dst = importDestination(slugDir, sessionId, artifact);
       await mkdir(path.dirname(dst), { recursive: true });
 
-      if (src.endsWith('.jsonl')) {
+      // Tool results are opaque text whatever their extension — never
+      // parse or reformat them.
+      const isOpaqueText = artifact.kind === 'tool-result';
+      if (!isOpaqueText && src.endsWith('.jsonl')) {
         await transformSession(src, dst, (record) => {
           return deepRewrite(record, rewriteString) as SessionRecord;
         });
-      } else if (src.endsWith('.json')) {
+      } else if (!isOpaqueText && src.endsWith('.json')) {
         const raw = await readFile(src, 'utf-8');
         const parsed = JSON.parse(raw) as unknown;
         const rewritten = deepRewrite(parsed, rewriteString);
@@ -211,6 +222,7 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
       `  Imported: ${sessionId}.jsonl — ${title} (${importedArtifacts} artifact(s)${sidecarNote})`,
     );
     importedCount++;
+    importedIds.push(sessionId);
   }
 
   console.log(`\nImported ${importedCount} session(s)`);
@@ -255,6 +267,10 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   }
 
   console.log('Open Claude Code and use /resume to see imported sessions.');
+  if (importedIds.length > 0 && importedIds.length <= 3) {
+    console.log('Or jump straight in:');
+    for (const id of importedIds) console.log(`  claude --resume ${id}`);
+  }
 }
 
 /**
@@ -285,7 +301,7 @@ async function synthesizeEntriesFromDir(sessionsDir: string): Promise<ManifestEn
     try {
       const meta = await extractSessionMeta(file);
       sessionId = meta.sessionId;
-      title = meta.customTitle ?? meta.lastPrompt;
+      title = sessionTitle(meta);
     } catch {
       // File without a sessionId — skip it rather than corrupt the store.
       continue;

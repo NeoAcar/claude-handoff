@@ -150,6 +150,22 @@ export function deepRedact(
 }
 
 /**
+ * Build a pattern that matches one exact string (no regex semantics),
+ * ignoring case. Used for values learned from the session itself, e.g. the account email.
+ */
+export function literalPattern(
+  name: string,
+  literal: string,
+  replacement: string,
+): RedactionPattern {
+  return {
+    name,
+    regex: new RegExp(literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+    replacement,
+  };
+}
+
+/**
  * Parse custom patterns from an ignore-patterns file.
  * Each non-empty, non-comment line is a regex pattern.
  */

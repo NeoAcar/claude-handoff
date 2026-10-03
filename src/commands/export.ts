@@ -9,13 +9,14 @@
  *   subagents/*.meta.json — per-subagent metadata sidecars (if any)
  *   remote-agents/*.jsonl — per-remote-agent transcripts (if any)
  *   session-memory/*      — session-memory markdown (if any)
+ *   tool-results/*        — persisted large tool outputs (if any)
  *
  * Every artifact runs through the same path-rewrite + redaction
  * pipeline as the main transcript, adapted to the artifact type
  * (streaming for JSONL, buffered for JSON/markdown).
  */
 
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { localToPortable, deepRewrite } from '../core/paths.js';
@@ -29,9 +30,14 @@ import {
   listProjectSessionFiles,
 } from '../core/store.js';
 import type { SourceArtifact } from '../core/store.js';
-import { extractSessionMeta, transformSession } from '../core/session.js';
-import type { SessionRecord } from '../core/session.js';
-import { stripThinkingSignatures } from '../core/sanitizeRecord.js';
+import {
+  extractSessionMeta,
+  matchesSessionSelector,
+  sessionTitle,
+  transformSession,
+} from '../core/session.js';
+import type { SessionMeta, SessionRecord } from '../core/session.js';
+import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
@@ -103,9 +109,32 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     return;
   }
 
+  // One metadata pass over every local session, before filtering.
+  // Besides titles and counts it yields the account identity (email,
+  // org UUID) recorded in any of them, which is scrubbed from every
+  // exported file — including sessions and memory files that don't
+  // carry the identity record themselves.
+  const metaByFile = new Map<string, SessionMeta>();
+  const identityPatterns: RedactionPattern[] = [];
+  for (const f of sessionFiles) {
+    const meta = await extractSessionMeta(f);
+    metaByFile.set(f, meta);
+    for (const pattern of identityRedactionPatterns(meta.identity)) {
+      if (!identityPatterns.some((p) => p.regex.source === pattern.regex.source)) {
+        identityPatterns.push(pattern);
+      }
+    }
+  }
+
   // Apply filters
   if (options.session) {
-    sessionFiles = sessionFiles.filter((f) => path.basename(f).startsWith(options.session!));
+    sessionFiles = sessionFiles.filter((f) =>
+      matchesSessionSelector(
+        options.session!,
+        path.basename(f, '.jsonl'),
+        sessionTitle(metaByFile.get(f)!),
+      ),
+    );
     if (sessionFiles.length === 0) {
       throw new Error(`No session matching "${options.session}" found.`);
     }
@@ -120,7 +149,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     }
     const filtered: string[] = [];
     for (const f of sessionFiles) {
-      const meta = await extractSessionMeta(f);
+      const meta = metaByFile.get(f)!;
       const firstMs = meta.firstTimestamp ? Date.parse(meta.firstTimestamp) : NaN;
       if (!Number.isNaN(firstMs) && firstMs >= sinceMs) {
         filtered.push(f);
@@ -144,9 +173,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   if (options.dryRun) {
     console.log(`Would export ${sessionFiles.length} session(s) as "${author}":\n`);
     for (const f of sessionFiles) {
-      const meta = await extractSessionMeta(f);
+      const meta = metaByFile.get(f)!;
       const sidecars = await collectSessionArtifacts(f);
-      const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+      const title = sessionTitle(meta) ?? '(untitled)';
       const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
       console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
     }
@@ -192,7 +221,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     localToPortable(s, projectRoot, localHome, storeDir ?? undefined);
 
   for (const sessionFile of sessionFiles) {
-    const meta = await extractSessionMeta(sessionFile);
+    const meta = metaByFile.get(sessionFile)!;
     const sessionId = meta.sessionId;
     const sourceStat = await stat(sessionFile);
     const sourceMtimeMs = sourceStat.mtimeMs;
@@ -252,6 +281,10 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     const sessionHits: RedactionHit[] = [];
     const artifacts: BundleArtifact[] = [];
 
+    // User patterns from .claude-handoff-ignore plus the account
+    // identity learned from the local sessions.
+    const sessionPatterns = [...customPatterns, ...identityPatterns];
+
     // --- Main transcript ---
     let strippedProgress = 0;
     const mainBundlePath = 'main.jsonl';
@@ -264,7 +297,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
       let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
       if (!options.noRedact) {
-        const { value, hits } = deepRedact(rewritten, customPatterns);
+        const { value, hits } = deepRedact(rewritten, sessionPatterns);
         rewritten = value as SessionRecord;
         sessionHits.push(...hits);
       }
@@ -285,14 +318,35 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     result.totalRecovered += mainTransform.stats.recoveredLines;
     result.totalSkipped += mainTransform.stats.skippedLines;
 
-    // --- Sidecars (subagents, remote-agents, session-memory) ---
+    // --- Sidecars (subagents, remote-agents, session-memory, tool-results) ---
     const sidecarSources = await collectSessionArtifacts(sessionFile);
     for (const src of sidecarSources) {
       const bundlePath = src.relativePath;
       const dest = path.join(bundleDir, bundlePath);
       await mkdir(path.dirname(dest), { recursive: true });
 
-      if (bundlePath.endsWith('.jsonl')) {
+      if (src.kind === 'tool-result') {
+        // Opaque text the transcript points at by path. Binary output
+        // can't be scanned for secrets, so it stays behind.
+        if (!(await isTextFile(src.sourcePath))) {
+          console.warn(`  Skipping non-text tool result ${bundlePath} for ${sessionId}`);
+          continue;
+        }
+        const hitsBefore = sessionHits.length;
+        await transformTextFile(src.sourcePath, dest, {
+          rewriteString,
+          redact: !options.noRedact,
+          customPatterns: sessionPatterns,
+          onHits: (hits) => sessionHits.push(...hits),
+        });
+        artifacts.push({
+          kind: 'tool-result',
+          bundlePath,
+          originalRelativePath: src.relativePath,
+          redactionHits: sessionHits.length - hitsBefore,
+          bytes: await fileSize(dest),
+        });
+      } else if (bundlePath.endsWith('.jsonl')) {
         const hitsBefore = sessionHits.length;
         const sideTransform = await transformSession(src.sourcePath, dest, (record) => {
           if (options.stripProgress && record.type === 'progress') {
@@ -302,7 +356,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
           const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
           let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
           if (!options.noRedact) {
-            const { value, hits } = deepRedact(rewritten, customPatterns);
+            const { value, hits } = deepRedact(rewritten, sessionPatterns);
             rewritten = value as SessionRecord;
             sessionHits.push(...hits);
           }
@@ -324,7 +378,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
         await transformJsonFile(src.sourcePath, dest, {
           rewriteString,
           redact: !options.noRedact,
-          customPatterns,
+          customPatterns: sessionPatterns,
           onHits: (hits) => sessionHits.push(...hits),
         });
         artifacts.push({
@@ -340,7 +394,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
         await transformTextFile(src.sourcePath, dest, {
           rewriteString,
           redact: !options.noRedact,
-          customPatterns,
+          customPatterns: sessionPatterns,
           onHits: (hits) => sessionHits.push(...hits),
         });
         artifacts.push({
@@ -354,7 +408,14 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     }
 
     // --- Per-bundle metadata sidecar ---
-    const title = meta.customTitle ?? meta.lastPrompt ?? '(untitled)';
+    // The title is copied into metadata.json and the manifest, so it
+    // gets the same rewrite + redaction as the transcript it came from.
+    let title = rewriteString(sessionTitle(meta) ?? '(untitled)');
+    if (!options.noRedact) {
+      const redactedTitle = redactText(title, sessionPatterns);
+      title = redactedTitle.text;
+      sessionHits.push(...redactedTitle.hits);
+    }
     const metadataPayload = {
       sessionId,
       author,
@@ -414,7 +475,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sharedDir,
       rewriteString,
       redact: !options.noRedact,
-      customPatterns,
+      customPatterns: [...customPatterns, ...identityPatterns],
       onHits: (hits) => result.allHits.push(...hits),
     });
     if (memoryBundle) {
@@ -504,7 +565,7 @@ async function transformJsonFile(src: string, dst: string, ctx: TransformCtx): P
 
 /**
  * Read a text file (markdown, plain text), rewrite paths + redact, write.
- * Used for session-memory/*.md.
+ * Used for session-memory/*.md and tool-results/*.
  */
 async function transformTextFile(src: string, dst: string, ctx: TransformCtx): Promise<void> {
   let content = await readFile(src, 'utf-8');
@@ -566,6 +627,20 @@ async function exportMemory(args: {
     sourceGitRoot,
     files,
   };
+}
+
+/**
+ * True when the file decodes as text. A NUL byte in the first 8 KB is
+ * the usual binary tell.
+ */
+async function isTextFile(p: string): Promise<boolean> {
+  const handle = await open(p, 'r');
+  try {
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(8192), 0, 8192, 0);
+    return !buffer.subarray(0, bytesRead).includes(0);
+  } finally {
+    await handle.close();
+  }
 }
 
 async function fileSize(p: string): Promise<number> {

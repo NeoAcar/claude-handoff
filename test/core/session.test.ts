@@ -9,6 +9,7 @@ import {
   writeRecords,
   transformSession,
   listSessionFiles,
+  matchesSessionSelector,
 } from '../../src/core/session.js';
 import type { SessionRecord } from '../../src/core/session.js';
 
@@ -219,5 +220,23 @@ describe('listSessionFiles', () => {
   it('returns empty array for nonexistent directory', async () => {
     const files = await listSessionFiles('/nonexistent/directory');
     expect(files).toEqual([]);
+  });
+});
+
+describe('matchesSessionSelector', () => {
+  const id = '084c4bf8-1111-2222-3333-444444444444';
+
+  it('matches a session ID prefix', () => {
+    expect(matchesSessionSelector('084c4bf8', id, undefined)).toBe(true);
+    expect(matchesSessionSelector('84c4', id, undefined)).toBe(false);
+  });
+
+  it('matches a case-insensitive title substring', () => {
+    expect(matchesSessionSelector('upload', id, 'Fix Upload timeout')).toBe(true);
+    expect(matchesSessionSelector('download', id, 'Fix Upload timeout')).toBe(false);
+  });
+
+  it('does not match an untitled session by title', () => {
+    expect(matchesSessionSelector('anything', id, undefined)).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ program
 program
   .command('export')
   .description("Export local Claude Code sessions to .claude-shared/ (Alice's command)")
-  .option('--session <id>', 'Export one specific session')
+  .option('--session <id|title>', 'Export sessions matching an ID prefix or title text')
   .option('--last <n>', 'Export the last N sessions', parseInt)
   .option('--since <date>', 'Export sessions modified since date')
   .option('--author <name>', 'Tag exported sessions with author name')
@@ -73,7 +73,7 @@ program
 program
   .command('import')
   .description("Import shared sessions from .claude-shared/ (Neo's command)")
-  .option('--session <id>', 'Import one specific session')
+  .option('--session <id|title>', 'Import sessions matching an ID prefix or title text')
   .option('--all', 'Import everything (default)', true)
   .option('--dry-run', 'Preview path rewrites and destination', false)
   .option('--overwrite', 'Replace existing local sessions with same ID', false)

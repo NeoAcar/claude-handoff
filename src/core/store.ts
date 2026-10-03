@@ -17,7 +17,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { createReadStream } from 'node:fs';
-import { readdir, realpath, stat } from 'node:fs/promises';
+import { lstat, readdir, realpath, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -256,7 +256,7 @@ async function walkMemoryDir(current: string, root: string, out: MemoryFileEntry
  * machine. Used as the input to the export pipeline's artifact loop.
  */
 export interface SourceArtifact {
-  kind: 'subagent' | 'subagent-meta' | 'remote-agent' | 'session-memory';
+  kind: 'subagent' | 'subagent-meta' | 'remote-agent' | 'session-memory' | 'tool-result';
   /** Absolute path to the file on disk. */
   sourcePath: string;
   /** Path relative to `<storeDir>/<sessionId>/`, e.g. "subagents/foo.jsonl". */
@@ -266,7 +266,8 @@ export interface SourceArtifact {
 /**
  * Collect all sidecar artifacts that live beside a session's main
  * transcript: subagent transcripts and their meta sidecars, remote-agent
- * transcripts, and session-memory markdown. Returns an empty array if
+ * transcripts, session-memory markdown, and persisted tool results
+ * (`tool-results/*`, which the transcript references by path). Returns an empty array if
  * the session has no sidecar directory.
  */
 export async function collectSessionArtifacts(
@@ -304,7 +305,8 @@ async function walkSidecars(
     const fullPath = path.join(current, name);
     let entryStat;
     try {
-      entryStat = await stat(fullPath);
+      // lstat: a symlink in the sidecar dir must not pull its target into the bundle.
+      entryStat = await lstat(fullPath);
     } catch {
       continue;
     }
@@ -323,9 +325,7 @@ async function walkSidecars(
   }
 }
 
-function classifySidecar(
-  relativePath: string,
-): 'subagent' | 'subagent-meta' | 'remote-agent' | 'session-memory' | null {
+function classifySidecar(relativePath: string): SourceArtifact['kind'] | null {
   if (relativePath.startsWith('subagents/')) {
     if (relativePath.endsWith('.jsonl')) return 'subagent';
     if (relativePath.endsWith('.meta.json')) return 'subagent-meta';
@@ -336,6 +336,9 @@ function classifySidecar(
   }
   if (relativePath.startsWith('session-memory/')) {
     return 'session-memory';
+  }
+  if (relativePath.startsWith('tool-results/')) {
+    return 'tool-result';
   }
   return null;
 }
