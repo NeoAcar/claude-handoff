@@ -28,7 +28,26 @@ ranges that shipped them; git history has the details.
       reviewers will want before pulling a PR that touches
       `.claude-shared/`.
 
+- [ ] **Re-scrub bundles from older versions.** Export skips a
+      session whose mtime + record count are unchanged, so bundles
+      written before account-identity scrubbing keep the email / org
+      UUID until the user deletes them. Record the exporter version
+      in the manifest entry and treat an older one as "needs refresh".
+
+- [ ] **`sourceProjectRoot` is an absolute path.** `metadata.json`
+      and `.manifest.json` store the sender's real project root
+      (home directory name included), unlike everything else in the
+      bundle. Nothing reads it on import. Store it as a placeholder
+      or drop it.
+
 ### Medium priority
+
+- [ ] **Bundle size on Claude Code 2.1.x.** `prompt_snapshot`,
+      `deferred_tools_delta`, `deferred_tools_record` and
+      `mcp_instructions_delta` attachments dominate small sessions
+      (a 2-turn session measured 282 KB, ~200 KB of it these
+      records). They sit in the `parentUuid` chain, so dropping them
+      needs a resume test first, like `--strip-progress`.
 
 - [ ] **`.claude-handoff-memory-ignore` allow-list.** Memory export
       is currently all-or-nothing (minus `MEMORY.md`). Teams that
@@ -71,8 +90,16 @@ ranges that shipped them; git history has the details.
 
 ### Low priority
 
-- [ ] **`--dry-run` on import.** Symmetry with export. Low demand
-      so far; no one has asked.
+- [ ] **Single-file transport.** Ideas seen in the upstream threads
+      (claude-session-port, ccswim): pack one session into a tarball
+      or single file for cases with no shared repo. Could be
+      `export --archive <file>` / `import --archive <file>` on top of
+      the existing bundle.
+
+- [ ] **Desktop app registration.** claude-code-export-import also
+      writes the Desktop app's `local_*.json` record so an imported
+      session shows in its sidebar. Not inspected here yet — needs a
+      Phase-0-style look at a real file before any code.
 
 - [ ] **Interactive picker for export.** Checkbox UI for selecting
       sessions. Nice-to-have; no real pain point yet.
@@ -106,6 +133,13 @@ ranges that shipped them; git history has the details.
 ---
 
 ## Completed
+
+### 0.2.1 — Claude Code 2.1.x compatibility
+
+Account-identity scrubbing (email, org UUID), `tool-results/`
+sidecars, `ai-title` titles, `--session` by title text. Verified
+export → import → `claude --resume` on Claude Code 2.1.288. See
+`CHANGELOG.md`.
 
 ### 0.2.0 — Iterative handoff
 
@@ -182,5 +216,5 @@ Informed by Codex analysis of the reference repo at `/tmp/codecli`
   (LLM-maintained; Claude Code rebuilds it). Worktrees share one
   memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-**Current test count:** 133 across 7 suites, including two
-integration suites (`bundle-roundtrip`, `memory-roundtrip`).
+**Current test count:** 148 across 9 suites, including four
+integration suites.

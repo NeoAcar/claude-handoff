@@ -4,6 +4,47 @@ All notable changes to `@neoacar/claude-handoff`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1]
+
+Compatibility pass against Claude Code 2.1.288.
+
+### Added
+
+- **Account identity scrubbing.** Newer Claude Code versions write the
+  account email (`session_context` attachment, plus its `rendered`
+  copy) and organization UUID (`credential_org` attachment) into the
+  transcript. Export now scrubs both across the whole bundle; hits are
+  logged as `account-email` / `account-org`. Skipped with `--no-redact`.
+  The identity is gathered from every local session of the project, so
+  sessions and memory files that don't carry the record are covered too.
+- **`tool-results/` sidecars.** Large tool outputs that Claude Code
+  persists under `<sessionId>/tool-results/` are bundled (path-rewritten
+  and redacted) so the transcript's `{{CLAUDE_STORE}}` references
+  resolve on the receiver. Binary files are skipped with a warning.
+- New manifest artifact kind `tool-result`.
+- **`--session` accepts title text.** `export --session "fix upload"`
+  matches a case-insensitive substring of the session title, as well
+  as the ID prefix it always took. Same on `import`.
+- `import` prints a ready-to-paste `claude --resume <id>` line when
+  it imported three sessions or fewer.
+
+### Fixed
+
+- Session titles written to `metadata.json` and `.manifest.json` now go
+  through path rewriting and redaction like the transcript.
+- Symlinks inside a session's sidecar directory are no longer followed.
+
+### Changed
+
+- Session titles prefer the user's custom title, then the
+  auto-generated `ai-title` record, then the last prompt.
+
+### Upgrade note
+
+- Bundles written by 0.2.0 or earlier are not re-scrubbed
+  automatically (an unchanged session is skipped). Delete
+  `.claude-shared/sessions/<sessionId>/` and export again.
+
 ## [0.2.0]
 
 ### Added
