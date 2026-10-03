@@ -18,6 +18,10 @@ into the teammate's `~/.claude/projects/` on import. `claude --resume`
 then shows the shared session with its original title and full
 history intact.
 
+<p align="center">
+  <img src="docs/demo.svg" alt="Alice exports a Claude Code session and pushes it; Neo pulls, imports and resumes it" width="900">
+</p>
+
 ## Install
 
 ```bash
@@ -65,6 +69,7 @@ Every session is exported as a bundle directory:
   subagents/*.jsonl       # Explore / Plan / general-purpose agent transcripts
   subagents/*.meta.json   # subagent metadata (agent type, description)
   session-memory/*.md     # session-scoped memory, when present
+  tool-results/*          # large tool outputs the transcript points at by path
 ```
 
 Plus optional project-level auto-memory (`--memory` flag) under
@@ -88,7 +93,7 @@ to the receiver's.
 ### Export options
 
 ```
---session <id>      Export one specific session
+--session <id|title> Export sessions matching an ID prefix or title text
 --last <n>          Export the last N sessions
 --since <date>      Only export sessions started on/after this ISO date
 --author <name>     Tag with author name (default: git user.name)
@@ -107,7 +112,7 @@ to the receiver's.
 ### Import options
 
 ```
---session <id>    Import one specific session
+--session <id|title> Import sessions matching an ID prefix or title text
 --dry-run         Preview path rewrites and destination
 --overwrite       Replace existing local sessions with same ID
 ```
@@ -142,6 +147,13 @@ it in so the whole team shares the same scrub rules.
   the count of unique secrets found and the total markers written; a
   redaction log lives at `.claude-handoff/redaction-log.json`
   (gitignored) for review.
+- **Account identity scrubbing.** Recent Claude Code versions record
+  the signed-in account's email and organization UUID inside the
+  transcript. Export learns both from the session and scrubs them
+  everywhere in the bundle (`[REDACTED:account-email]`, a nil UUID),
+  reported as `account-email` / `account-org` in the redaction log.
+  Bundles exported with 0.2.0 or earlier still contain them — delete
+  the bundle directory and re-export.
 - **Project store resolution.** Not a naive slug match — canonicalizes
   the project root (`realpath` + Unicode NFC) and, if the computed key
   misses, falls back to reading `cwd` fields from candidate session
@@ -192,15 +204,30 @@ git clone https://github.com/NeoAcar/claude-handoff
 cd claude-handoff
 npm install
 npm run build
-npm test               # vitest, ~130 tests
+npm test               # vitest, ~145 tests
 npm run lint           # prettier --check + tsc --noEmit
 npm link               # optional: make `claude-handoff` available globally
 ```
 
+## How this relates to Remote Control
+
+Claude Code now ships [Remote Control](https://code.claude.com/docs/en/remote-control)
+(`/remote-control`), which the maintainers point to in the cross-device
+threads below. It lets you watch and steer a session that is still
+running in a terminal from the browser or phone. The session keeps
+living on the original machine.
+
+claude-handoff covers the other case: the transcript itself moves, so
+a teammate (or you, on another machine) can `/resume` it there with the
+original machine switched off. Last verified end-to-end (export →
+import → `claude --resume`) against Claude Code 2.1.288.
+
 ## Related discussions
 
 - [anthropics/claude-code#11455](https://github.com/anthropics/claude-code/issues/11455) — Session Handoff / Continuity Support (open, most active)
-- [anthropics/claude-code#44063](https://github.com/anthropics/claude-code/issues/44063) — Resume Any Claude Session in the CLI (open)
+- [anthropics/claude-code#44063](https://github.com/anthropics/claude-code/issues/44063) — Resume Any Claude Session in the CLI (closed by its author)
+- [anthropics/claude-code#31992](https://github.com/anthropics/claude-code/issues/31992) — Cross-machine session resume for CLI-to-CLI handoff (open)
+- [anthropics/claude-code#47926](https://github.com/anthropics/claude-code/issues/47926) — Allow resuming Claude Code sessions across devices (closed, answered with Remote Control)
 - [anthropics/claude-code#10368](https://github.com/anthropics/claude-code/issues/10368) — Chat Package Export/Import: Git-compatible format for team collaboration (the original request, closed/locked)
 
 ## License
