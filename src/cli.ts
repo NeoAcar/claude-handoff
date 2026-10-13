@@ -13,6 +13,7 @@ import { statusCommand } from './commands/status.js';
 import { listCommand } from './commands/list.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportArchiveCommand, importArchiveCommand } from './commands/archive.js';
+import { skillInstallCommand, skillPrintCommand } from './commands/skill.js';
 import { TOOL_VERSION } from './core/version.js';
 
 const program = new Command();
@@ -135,6 +136,25 @@ program
   .description('Check the local setup: sessions, Claude Code version, bundles, redaction inputs')
   .action(async () => {
     await run(() => doctorCommand(getProjectRoot()));
+  });
+
+const skill = program
+  .command('skill')
+  .description('Claude Code skill that lets the agent run handoffs when asked');
+
+skill
+  .command('install')
+  .description('Write the skill to ~/.claude/skills/claude-handoff/')
+  .option('--force', 'Replace an existing skill file that was edited', false)
+  .action(async (opts) => {
+    await run(() => skillInstallCommand({ force: opts.force }));
+  });
+
+skill
+  .command('print')
+  .description('Print the skill file instead of installing it')
+  .action(() => {
+    skillPrintCommand();
   });
 
 function getProjectRoot(): string {
