@@ -3,11 +3,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { exportArchiveCommand, importArchiveCommand } from '../../src/commands/archive.js';
+import { exportCommand } from '../../src/commands/export.js';
+import { importCommand } from '../../src/commands/import.js';
 import { sanitizeProjectKey } from '../../src/core/store.js';
 
 const SESSION_ID = 'archive-1111-2222-3333-444444444444';
@@ -73,6 +75,7 @@ describe('archive round-trip', () => {
     await exportArchiveCommand(alice.project, archive, exportOptions);
 
     expect(await exists(archive)).toBe(true);
+    expect((await stat(archive)).mode & 0o077).toBe(0); // owner-only
     // The sender's paths appear nowhere in what gets sent, metadata included.
     const sent = execFileSync('tar', ['xzOf', archive], { encoding: 'utf-8' });
     expect(sent).not.toContain(alice.home);
@@ -142,6 +145,46 @@ describe('archive round-trip', () => {
     await expect(importArchiveCommand(neoProject, archive, importOptions)).rejects.toThrow(
       /not a usable claude-handoff archive/,
     );
+    expect(await exists(join(neoHome, '.claude'))).toBe(false);
+  });
+});
+
+describe('untrusted manifests', () => {
+  async function importWithManifest(
+    mutate: (manifest: { sessions: Array<Record<string, unknown>> }) => void,
+  ): Promise<{ run: Promise<void>; neoHome: string }> {
+    const alice = await seedAlice();
+    process.env.HOME = alice.home;
+    await exportCommand(alice.project, exportOptions);
+
+    const neoHome = join(scratch, 'neo-home');
+    const neoProject = join(neoHome, 'dev', 'app');
+    await mkdir(neoProject, { recursive: true });
+    await cp(join(alice.project, '.claude-shared'), join(neoProject, '.claude-shared'), {
+      recursive: true,
+    });
+    const manifestPath = join(neoProject, '.claude-shared', '.manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
+    mutate(manifest);
+    await writeFile(manifestPath, JSON.stringify(manifest));
+
+    process.env.HOME = neoHome;
+    return { run: importCommand(neoProject, importOptions), neoHome };
+  }
+
+  it('refuses a session ID that would climb out of the store', async () => {
+    const { run, neoHome } = await importWithManifest((m) => {
+      m.sessions[0].sessionId = '../../../escaped';
+    });
+    await expect(run).rejects.toThrow(/not a valid session ID/);
+    expect(await exists(join(neoHome, '.claude'))).toBe(false);
+  });
+
+  it('refuses an artifact path that would climb out of the bundle', async () => {
+    const { run, neoHome } = await importWithManifest((m) => {
+      (m.sessions[0].artifacts as Array<{ bundlePath: string }>)[0].bundlePath = '../../x.jsonl';
+    });
+    await expect(run).rejects.toThrow(/unsafe path/);
     expect(await exists(join(neoHome, '.claude'))).toBe(false);
   });
 });

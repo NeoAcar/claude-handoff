@@ -14,7 +14,7 @@
 
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, open, readdir, stat } from 'node:fs/promises';
+import { mkdir, open, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -25,6 +25,8 @@ export const ARCHIVE_VERSION = 1;
 export const ARCHIVE_INDEX_NAME = 'handoff-archive.json';
 
 const BLOCK = 512;
+/** The index is read into memory whole, so its declared size is capped. */
+const MAX_INDEX_BYTES = 16 * 1024 * 1024;
 
 export interface ArchiveIndex {
   format: typeof ARCHIVE_FORMAT;
@@ -85,7 +87,18 @@ export async function packArchive(
     yield Buffer.alloc(BLOCK * 2);
   }
 
-  await pipeline(Readable.from(tarStream()), createGzip(), createWriteStream(archivePath));
+  try {
+    // Owner-only: the archive holds conversation content.
+    await pipeline(
+      Readable.from(tarStream()),
+      createGzip(),
+      createWriteStream(archivePath, { mode: 0o600 }),
+    );
+  } catch (err) {
+    // Don't leave half an archive behind to be mistaken for a whole one.
+    await rm(archivePath, { force: true });
+    throw err;
+  }
   return index;
 }
 
@@ -174,11 +187,12 @@ export async function unpackArchive(archivePath: string, destDir: string): Promi
       const { name, size } = parseTarHeader(header);
       if (index === undefined) {
         if (name !== ARCHIVE_INDEX_NAME) throw new Error('missing index');
+        if (size > MAX_INDEX_BYTES) throw new Error('index too large');
         const body = await reader.read(size);
         if (body === null || body.length < size) throw new Error('truncated index');
         index = parseIndex(body.toString('utf-8'));
       } else {
-        if (!(name in index.files)) throw new Error(`unexpected file ${name}`);
+        if (!Object.hasOwn(index.files, name)) throw new Error(`unexpected file ${name}`);
         const target = safeArchivePath(destDir, name);
         await mkdir(path.dirname(target), { recursive: true });
         const hash = createHash('sha256');
@@ -267,22 +281,30 @@ function cString(buf: Buffer, start: number, length: number): string {
 }
 
 /**
- * Resolve an archive member name inside `destDir`, refusing anything
- * that could land outside it.
+ * Is this a plain relative path with forward slashes that stays inside
+ * whatever directory it is joined to? Used for archive member names and
+ * for paths read out of a manifest — both come from another machine.
  */
-export function safeArchivePath(destDir: string, name: string): string {
-  const segments = name.split('/');
-  if (
+export function isSafeRelativePath(name: string): boolean {
+  return !(
     name.length === 0 ||
     name.startsWith('/') ||
     name.includes('\\') ||
     name.includes('\0') ||
     /^[A-Za-z]:/.test(name) ||
-    segments.some((s) => s === '' || s === '.' || s === '..')
-  ) {
+    name.split('/').some((s) => s === '' || s === '.' || s === '..')
+  );
+}
+
+/**
+ * Resolve an archive member name inside `destDir`, refusing anything
+ * that could land outside it.
+ */
+export function safeArchivePath(destDir: string, name: string): string {
+  if (!isSafeRelativePath(name)) {
     throw new Error(`unsafe path ${JSON.stringify(name)}`);
   }
-  return path.join(destDir, ...segments);
+  return path.join(destDir, ...name.split('/'));
 }
 
 /** Pull exact byte counts out of a chunked stream. */

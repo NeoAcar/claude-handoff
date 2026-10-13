@@ -25,6 +25,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
 import { getMemoryDir, getOrComputeStoreDir } from '../core/store.js';
+import { isSafeRelativePath } from '../core/archive.js';
 import {
   listSessionFiles,
   extractSessionMeta,
@@ -44,6 +45,9 @@ export interface ImportOptions {
   /** Read bundles from here instead of `<project>/.claude-shared`. Used by archive import. */
   sharedDir?: string;
 }
+
+/** Session IDs are UUIDs in practice; allow any single safe path component. */
+const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 export async function importCommand(projectRoot: string, options: ImportOptions): Promise<void> {
   const localHome = os.homedir();
@@ -83,6 +87,31 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     entries = entries.filter((e) => matchesSessionSelector(options.session!, e.sessionId, e.title));
     if (entries.length === 0) {
       throw new Error(`No session matching "${options.session}" found.`);
+    }
+  }
+
+  // The manifest was written on another machine and may arrive in a file
+  // from anyone. Its session IDs and paths become filesystem paths under
+  // ~/.claude, so nothing proceeds unless every one of them stays put.
+  for (const entry of entries) {
+    if (!SAFE_SESSION_ID.test(entry.sessionId)) {
+      throw new Error(
+        `Refusing to import: ${JSON.stringify(entry.sessionId)} is not a valid session ID.`,
+      );
+    }
+    for (const artifact of entry.artifacts) {
+      if (!isSafeRelativePath(artifact.bundlePath)) {
+        throw new Error(
+          `Refusing to import ${entry.sessionId}: unsafe path ${JSON.stringify(artifact.bundlePath)} in the manifest.`,
+        );
+      }
+    }
+  }
+  for (const file of manifest?.memory?.files ?? []) {
+    if (!isSafeRelativePath(file.bundlePath)) {
+      throw new Error(
+        `Refusing to import memory: unsafe path ${JSON.stringify(file.bundlePath)} in the manifest.`,
+      );
     }
   }
 

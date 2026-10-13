@@ -47,9 +47,15 @@ export async function exportArchiveCommand(
   const size = (await stat(target)).size;
   console.log(`Wrote ${target} (${formatSize(size)})`);
   console.log(
-    'It holds the redacted session. Redaction lowers the risk, it does not remove it — ' +
-      'send it only to people you would show the conversation to.',
+    options.noRedact
+      ? 'It holds the session WITHOUT redaction. Treat it like the raw conversation.'
+      : 'It holds the redacted session. Redaction lowers the risk, it does not remove it — ' +
+          'send it only to people you would show the conversation to.',
   );
+  const inProject = path.relative(projectRoot, target);
+  if (!inProject.startsWith('..') && !path.isAbsolute(inProject)) {
+    console.log('Note: the archive is inside the project directory. Keep it out of git.');
+  }
   console.log(`They import it with: claude-handoff import --archive ${path.basename(target)}`);
 }
 
