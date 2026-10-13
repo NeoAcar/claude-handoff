@@ -92,6 +92,9 @@ const SKIPPED_DIRS = new Set([
 
 const MAX_SCAN_DEPTH = 3;
 
+/** Shell bookkeeping whose names only look secret: `PWD` is a directory, not a password. */
+const SHELL_VARIABLES = new Set(['PWD', 'OLDPWD']);
+
 // --- Parsing ---
 
 /**
@@ -224,15 +227,19 @@ function looksRandom(value: string): boolean {
 }
 
 /**
- * A filesystem path rather than key material: starts like one, and isn't
- * the long mixed-case-and-digits soup of a base64 secret that merely
- * begins with `/`.
+ * A filesystem path rather than key material: it starts like one, and
+ * isn't a base64 secret that merely begins with `/` (base64 has no `-`,
+ * `_` or `.`, which real paths nearly always do).
  */
 function looksLikePath(value: string): boolean {
   if (!/^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/]|~[\\/])/.test(value)) return false;
-  const keyLike =
-    value.length >= 30 && /\d/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value);
-  return !keyLike;
+  const base64Like =
+    value.length >= 30 &&
+    /^[A-Za-z0-9+/=]+$/.test(value) &&
+    /\d/.test(value) &&
+    /[a-z]/.test(value) &&
+    /[A-Z]/.test(value);
+  return !base64Like;
 }
 
 function passwordFromUrl(value: string): string | undefined {
@@ -347,7 +354,7 @@ export async function collectEnvSecrets(
 
   const envEntries: EnvEntry[] = [];
   for (const [key, value] of Object.entries(processEnv)) {
-    if (value) envEntries.push({ key, value });
+    if (value && !SHELL_VARIABLES.has(key)) envEntries.push({ key, value });
   }
 
   const merged = new Map<string, EnvSecret>();

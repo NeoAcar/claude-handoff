@@ -76,6 +76,7 @@ describe('selectSecrets', () => {
         { key: 'PRIVATE_KEY_PATH', value: '/etc/ssl/private/server.key' },
         { key: 'KEY_FILE', value: './secrets/key.pem' },
         { key: 'KEY_DIR', value: '~/keys/production' },
+        { key: 'KEY_ROOT', value: '/tmp/Build-1000/-home-User-Projects-app/7f3a9c2e' },
       ]),
     ).toEqual([]);
   });
@@ -213,6 +214,8 @@ describe('env file discovery', () => {
       'DB_PASSWORD=hunter2-hunter2\nNODE_ENV=development\nPORT=3000\n',
     );
     const collected = await collectEnvSecrets(root, {
+      PWD: '/tmp/Build-1000/-home-User-Projects-app/7f3a9c2e/scratch',
+      OLDPWD: '/home/User/Projects/App2024Release/build9',
       GITHUB_TOKEN: 'ghx-environment-token-value',
       LS_COLORS: 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35',
       EMPTY_TOKEN: '',
