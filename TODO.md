@@ -33,6 +33,14 @@ ranges that shipped them; git history has the details.
       auth header), shell-quoted and HTML-escaped forms are not, and
       `.env` files above the project root (monorepos) are not read.
 
+- [ ] **Which route should be the default?** A bare `export` writes
+      `.claude-shared/` (committed, so it stays in git history for
+      good); `-o` writes a `.handoff` file (leaves no trace, but has
+      to be sent by hand and has no iteration tracking). The file is
+      the safer default, the repo is what the tool is known for.
+      Decide after real use shows which one people reach for; the
+      alternative is `export` → file, `export --repo` → `.claude-shared/`.
+
 ### Medium priority
 
 - [ ] **Bundle size on Claude Code 2.1.x.** `prompt_snapshot`,
