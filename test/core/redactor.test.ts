@@ -238,3 +238,48 @@ describe('redaction hits', () => {
     expect(patterns).toContain('password');
   });
 });
+
+describe('provider key formats added in 0.3.0', () => {
+  const redacted = (text: string) => redactText(text).text;
+
+  it('redacts OpenAI project, service-account and admin keys', () => {
+    const body = 'aB3dE6gH9jK2mN5pQ8sT_uV1wX4yZ7-bC0dE3fG6hI9';
+    expect(redacted(`OPENAI=sk-proj-${body}`)).toBe('OPENAI=[REDACTED:openai-key]');
+    expect(redacted(`sk-svcacct-${body}`)).toBe('[REDACTED:openai-key]');
+    expect(redacted(`sk-admin-${body}`)).toBe('[REDACTED:openai-key]');
+  });
+
+  it('still redacts legacy OpenAI keys and leaves short sk- strings alone', () => {
+    expect(redacted('sk-' + 'a1B2c3D4'.repeat(5))).toBe('[REDACTED:openai-key]');
+    expect(redacted('class sk-proj-card and sk-button')).toBe('class sk-proj-card and sk-button');
+  });
+
+  it('redacts GitHub fine-grained tokens', () => {
+    const pat = 'github_pat_' + '11ABCDEFG0aBcDeFgHiJkL_' + 'mNoPqRsTuVwXyZ0123456789'.repeat(2);
+    expect(redacted(`token is ${pat}.`)).toBe('token is [REDACTED:github-pat].');
+  });
+
+  it('redacts Google API keys', () => {
+    const key = 'AIza' + 'SyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY';
+    expect(key).toHaveLength(39);
+    expect(redacted(`key=${key}&q=1`)).toBe('key=[REDACTED:google-api-key]&q=1');
+  });
+
+  it('redacts Slack tokens', () => {
+    expect(redacted('xoxb-1234567890-abcdefghij')).toBe('[REDACTED:slack-token]');
+  });
+
+  it('redacts generic secret assignments in several spellings', () => {
+    expect(redacted('api_key = "f3a9c2e1b7d4a6f8c0e2"')).toBe('api_key = "[REDACTED:secret]"');
+    expect(redacted('"client_secret": "Zx9Kq2Lm8Pw4Rt6Yv1Bn"')).toBe(
+      '"client_secret": "[REDACTED:secret]"',
+    );
+    expect(redacted('WEBHOOK_TOKEN=9f8e7d6c5b4a39281706')).toBe('WEBHOOK_TOKEN=[REDACTED:secret]');
+  });
+
+  it('leaves identifiers and short values on the right-hand side alone', () => {
+    const code = 'const token = parseAuthorizationHeader(req); secret: process.env.SECRET';
+    expect(redacted(code)).toBe(code);
+    expect(redacted('token: abc123')).toBe('token: abc123');
+  });
+});

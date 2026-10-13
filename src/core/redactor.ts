@@ -30,14 +30,32 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
     replacement: '[REDACTED:github-token]',
   },
   {
+    name: 'github-pat',
+    // Fine-grained personal access tokens.
+    regex: /github_pat_[A-Za-z0-9_]{30,}/g,
+    replacement: '[REDACTED:github-pat]',
+  },
+  {
     name: 'anthropic-key',
     regex: /sk-ant-[A-Za-z0-9-]+/g,
     replacement: '[REDACTED:anthropic-key]',
   },
   {
     name: 'openai-key',
-    regex: /sk-[A-Za-z0-9]{32,}/g,
+    // Legacy keys are `sk-` + 32+ alphanumerics. Project / service-account /
+    // admin keys carry a prefix and use `-` and `_` in the body.
+    regex: /sk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{32,})/g,
     replacement: '[REDACTED:openai-key]',
+  },
+  {
+    name: 'google-api-key',
+    regex: /AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g,
+    replacement: '[REDACTED:google-api-key]',
+  },
+  {
+    name: 'slack-token',
+    regex: /xox[baprs]-[A-Za-z0-9-]{10,}/g,
+    replacement: '[REDACTED:slack-token]',
   },
   {
     name: 'bearer',
@@ -48,6 +66,15 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
     name: 'password',
     regex: /(?<=(?:password|passwd|pwd)\s*[:=]\s*)\S+/gi,
     replacement: '[REDACTED:password]',
+  },
+  {
+    name: 'secret-assignment',
+    // `api_key = "…"`, `"client_secret": "…"`, `TOKEN=…`. The value must be
+    // 16+ characters and contain a digit, so `token = parseAuthorizationHeader`
+    // and other plain identifiers on the right-hand side are left alone.
+    regex:
+      /(?<=(?:api[_-]?key|secret|token|access[_-]?key)['"]?\s*[:=]\s*['"]?)(?=[A-Za-z0-9._/+-]*\d)[A-Za-z0-9._/+-]{16,}/gi,
+    replacement: '[REDACTED:secret]',
   },
   {
     name: 'url-with-creds',
@@ -87,7 +114,10 @@ export function redactText(text: string, customPatterns: RedactionPattern[] = []
   const hits: RedactionHit[] = [];
   let result = text;
 
-  const allPatterns = [...DEFAULT_PATTERNS, ...customPatterns];
+  // Caller-supplied patterns first: they are the specific ones (a project's
+  // own regexes, literal values learned from the session) and should name
+  // the hit before a generic default swallows the same text.
+  const allPatterns = [...customPatterns, ...DEFAULT_PATTERNS];
 
   for (const pattern of allPatterns) {
     // Reset regex state (global flag)
