@@ -35,7 +35,7 @@ Then run `claude-handoff` from any project directory.
 ```bash
 # Alice's machine, in the project
 claude-handoff export                 # lists her sessions, writes nothing
-claude-handoff export "upload"        # export the one whose title mentions "upload"
+claude-handoff export "login bug"     # export the session titled "Fix login bug"
 git add .claude-shared/ && git commit -m "handoff" && git push
 
 # Neo's machine
@@ -52,11 +52,11 @@ tool calls, and subagent transcripts.
 
 ```bash
 # sender
-claude-handoff export "upload" -o fix-upload.handoff.tgz
+claude-handoff export "login bug" -o login-bug.handoff.tgz
 # ...send the file any way you like...
 
 # receiver, in their checkout of the project
-claude-handoff import fix-upload.handoff.tgz
+claude-handoff import login-bug.handoff.tgz
 ```
 
 The archive holds the same redacted bundle and is checksummed, so a
@@ -110,7 +110,7 @@ Running `claude-handoff` alone shows `status`.
 ### Choosing what to export
 
 ```
-claude-handoff export "fix upload"   words from the title, or an ID prefix
+claude-handoff export "login bug"   words from the title, or an ID prefix
 claude-handoff export -n 1           the most recent session (-n 3 for three)
 claude-handoff export --all          every session of this project
 ```

@@ -13,8 +13,8 @@ import sys
 W, FS, CW, LH, X0, Y0 = 900, 13, 7.83, 24, 24, 92
 SID = "084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f"
 KNOWN = "Known secret values to scrub: 2 (DB_PASSWORD, STRIPE_SECRET_KEY) from .env, the environment"
-EXPORTED = f"  Exported: {SID}/ — Fix upload timeout (212 records + 2 sidecar(s))"
-IMPORTED = f"  Imported: {SID}.jsonl — Fix upload timeout (3 artifact(s) + 2 sidecar(s))"
+EXPORTED = f"  Exported: {SID}/ — Fix login bug (212 records + 2 sidecar(s))"
+IMPORTED = f"  Imported: {SID}.jsonl — Fix login bug (3 artifact(s) + 2 sidecar(s))"
 REDACTED = "Redacted: 5 unique secret(s), 8 marker(s) written across fields"
 
 # Each scene: (label, who, [steps]). A step is ("cmd", row, text, t0, t1) or
@@ -26,7 +26,7 @@ DEMOS = {
         "Neo pulls, imports and resumes it.",
         "scenes": [
             ("① Alice's machine — export", "alice", 12.4, [
-                ("cmd", 0, 'claude-handoff export "upload"', 0.8, 2.4),
+                ("cmd", 0, 'claude-handoff export "login bug"', 0.8, 2.4),
                 ("out", 1, KNOWN, 2.9, "n"),
                 ("out", 2, EXPORTED, 3.4, "o"),
                 ("out", 3, "Exported 1 session(s) to .claude-shared/", 3.7, "o"),
@@ -46,7 +46,7 @@ DEMOS = {
                 ("out", 6, "Or jump straight in:", 5.0, "d"),
                 ("out", 7, f"  claude --resume {SID}", 5.2, "d"),
                 ("cmd", 9, f"claude --resume {SID}", 6.2, 8.0),
-                ("out", 11, "✓ “Fix upload timeout” resumes on Neo’s machine with its full history", 8.7, "ok"),
+                ("out", 11, "✓ “Fix login bug” resumes on Neo’s machine with its full history", 8.7, "ok"),
             ]),
         ],
     },
@@ -56,21 +56,21 @@ DEMOS = {
         "elsewhere, with no shared repository.",
         "scenes": [
             ("① Sender — no shared repo", "alice", 9.2, [
-                ("cmd", 0, 'claude-handoff export "upload" -o fix-upload.handoff.tgz', 0.8, 3.2),
+                ("cmd", 0, 'claude-handoff export "login bug" -o login-bug.handoff.tgz', 0.8, 3.2),
                 ("out", 1, KNOWN, 3.7, "n"),
                 ("out", 2, EXPORTED, 4.2, "o"),
                 ("out", 3, "Exported 1 session(s)", 4.5, "o"),
                 ("out", 4, REDACTED, 4.8, "w"),
-                ("out", 5, "Wrote /home/alice/myproject/fix-upload.handoff.tgz (148.3 KB)", 5.3, "o"),
+                ("out", 5, "Wrote /home/alice/myproject/login-bug.handoff.tgz (148.3 KB)", 5.3, "o"),
                 ("out", 7, "→ one checksummed file: send it any way you like", 6.4, "n"),
             ]),
             ("② Receiver — import &amp; resume", "neo", 9.8, [
-                ("cmd", 0, "claude-handoff import fix-upload.handoff.tgz", 0.7, 2.6),
+                ("cmd", 0, "claude-handoff import login-bug.handoff.tgz", 0.7, 2.6),
                 ("out", 1, "Archive verified: 6 file(s), written by claude-handoff 0.3.0", 3.1, "n"),
                 ("out", 2, IMPORTED, 3.6, "o"),
                 ("out", 3, "Imported 1 session(s)", 3.9, "o"),
                 ("cmd", 5, f"claude --resume {SID}", 4.9, 6.7),
-                ("out", 7, "✓ “Fix upload timeout” resumes with its full history — no repo involved", 7.4, "ok"),
+                ("out", 7, "✓ “Fix login bug” resumes with its full history — no repo involved", 7.4, "ok"),
             ]),
         ],
     },

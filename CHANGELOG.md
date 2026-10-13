@@ -38,7 +38,7 @@ Verified end-to-end against Claude Code 2.1.289.
 
 - **Simpler commands.** `export [session]` and `import [file]` take
   what used to be `--session` and `--archive` as plain arguments
-  (`export "upload" -o handoff.tgz`, `import handoff.tgz`). `-n` is
+  (`export "login bug" -o handoff.tgz`, `import handoff.tgz`). `-n` is
   short for `--last`.
 - **A bare `export` no longer writes every session.** It lists them
   and stops; a title, `-n`, or `--all` chooses. **Breaking** for
