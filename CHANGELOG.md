@@ -36,6 +36,20 @@ Verified end-to-end against Claude Code 2.1.289.
 
 ### Changed
 
+- **Simpler commands.** `export [session]` and `import [file]` take
+  what used to be `--session` and `--archive` as plain arguments
+  (`export "upload" -o handoff.tgz`, `import handoff.tgz`). `-n` is
+  short for `--last`.
+- **A bare `export` no longer writes every session.** It lists them
+  and stops; a title, `-n`, or `--all` chooses. **Breaking** for
+  scripts that relied on the old behaviour: use `export --all`.
+- **No setup step.** The first export adds `.claude-handoff/` to
+  `.gitignore` itself (in a git repository). `init` still works but is
+  no longer needed.
+- `list` is folded into `status -v`. `import --all` is gone; it was
+  already the default.
+- Rarely used export flags moved out of the main `--help` into a
+  "less common options" block.
 - Sessions with no title record are labelled by the first thing the
   user asked, with Claude Code's control blocks stripped, rather than
   by the last prompt.

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 304" width="900" height="304" role="img" aria-label="claude-handoff demo: exporting a session to a single file and importing it elsewhere, with no shared repository.">
+<style>
+text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+.o { fill: #c9d1d9; } .d { fill: #8b949e; } .w { fill: #e3b341; } .c { fill: #f0f6fc; }
+.n { fill: #79c0ff; } .ok { fill: #56d364; font-weight: 600; }
+.p { font-weight: 600; } .alice { fill: #f778ba; } .neo { fill: #39c5cf; }
+.tab { fill: #c9d1d9; font-size: 13px; font-weight: 600; } .cur { fill: #c9d1d9; }
+</style>
+<defs>
+<clipPath id="c0"><rect x="172.8" y="76" width="0.0" height="22"><animate attributeName="width" dur="19.0s" repeatCount="indefinite" values="0;0;440.5;440.5" keyTimes="0.0000;0.0421;0.1684;1.0000"/></rect></clipPath>
+<clipPath id="c1"><rect x="157.1" y="76" width="0.0" height="22"><animate attributeName="width" dur="19.0s" repeatCount="indefinite" values="0;0;346.5;346.5" keyTimes="0.0000;0.5211;0.6211;1.0000"/></rect></clipPath>
+<clipPath id="c2"><rect x="157.1" y="196" width="0.0" height="22"><animate attributeName="width" dur="19.0s" repeatCount="indefinite" values="0;0;409.2;409.2" keyTimes="0.0000;0.7421;0.8368;1.0000"/></rect></clipPath>
+</defs>
+<rect width="900" height="304" rx="10" fill="#0d1117"/>
+<rect width="900" height="42" rx="10" fill="#161b22"/><rect y="32" width="900" height="10" fill="#161b22"/>
+<rect x="0.5" y="0.5" width="899" height="303" rx="10" fill="none" stroke="#30363d"/>
+<circle cx="22" cy="21" r="6" fill="#ff5f56"/><circle cx="42" cy="21" r="6" fill="#ffbd2e"/><circle cx="62" cy="21" r="6" fill="#27c93f"/>
+<g opacity="1"><animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="1;0" keyTimes="0.0000;0.4842"/>
+<text x="450.0" y="27" class="tab" text-anchor="middle">① Sender — no shared repo</text>
+<text x="24" y="92" class="p alice" opacity="0" xml:space="preserve">alice:~/myproject$ <animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.0237"/></text>
+<text x="172.8" y="92" class="c" clip-path="url(#c0)" xml:space="preserve">claude-handoff export &quot;upload&quot; -o fix-upload.handoff.tgz</text>
+<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="19.0s" repeatCount="indefinite" values="172.8;172.8;613.2;613.2" keyTimes="0.0000;0.0421;0.1684;1.0000"/><animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.0237;0.1921"/></rect>
+<text x="24" y="116" class="n" opacity="0" xml:space="preserve">Known secret values to scrub: 2 (DB_PASSWORD, STRIPE_SECRET_KEY) from .env, the environment<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1947"/></text>
+<text x="24" y="140" class="o" opacity="0" xml:space="preserve">  Exported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f/ — Fix upload timeout (212 records + 2 sidecar(s))<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2211"/></text>
+<text x="24" y="164" class="o" opacity="0" xml:space="preserve">Exported 1 session(s)<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2368"/></text>
+<text x="24" y="188" class="w" opacity="0" xml:space="preserve">Redacted: 5 unique secret(s), 8 marker(s) written across fields<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2526"/></text>
+<text x="24" y="212" class="o" opacity="0" xml:space="preserve">Wrote /home/alice/myproject/fix-upload.handoff.tgz (148.3 KB)<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2789"/></text>
+<text x="24" y="260" class="n" opacity="0" xml:space="preserve">→ one checksummed file: send it any way you like<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.3368"/></text>
+</g>
+<g opacity="0"><animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.4842"/>
+<text x="450.0" y="27" class="tab" text-anchor="middle">② Receiver — import &amp; resume</text>
+<text x="24" y="92" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.5026"/></text>
+<text x="157.1" y="92" class="c" clip-path="url(#c1)" xml:space="preserve">claude-handoff import fix-upload.handoff.tgz</text>
+<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="19.0s" repeatCount="indefinite" values="157.1;157.1;503.6;503.6" keyTimes="0.0000;0.5211;0.6211;1.0000"/><animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.5026;0.6447"/></rect>
+<text x="24" y="116" class="n" opacity="0" xml:space="preserve">Archive verified: 6 file(s), written by claude-handoff 0.3.0<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6474"/></text>
+<text x="24" y="140" class="o" opacity="0" xml:space="preserve">  Imported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f.jsonl — Fix upload timeout (3 artifact(s) + 2 sidecar(s))<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6737"/></text>
+<text x="24" y="164" class="o" opacity="0" xml:space="preserve">Imported 1 session(s)<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6895"/></text>
+<text x="24" y="212" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.7237"/></text>
+<text x="157.1" y="212" class="c" clip-path="url(#c2)" xml:space="preserve">claude --resume 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f</text>
+<rect y="199" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="19.0s" repeatCount="indefinite" values="157.1;157.1;566.3;566.3" keyTimes="0.0000;0.7421;0.8368;1.0000"/><animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.7237;0.8605"/></rect>
+<text x="24" y="260" class="ok" opacity="0" xml:space="preserve">✓ “Fix upload timeout” resumes with its full history — no repo involved<animate attributeName="opacity" dur="19.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.8737"/></text>
+</g>
+</svg>

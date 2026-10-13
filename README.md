@@ -33,36 +33,38 @@ Then run `claude-handoff` from any project directory.
 ## The flow
 
 ```bash
-# Alice's machine
-cd myproject
-claude-handoff init              # one-time setup, adds .claude-handoff/ to .gitignore
-# ... Alice works with Claude Code for a while ...
-claude-handoff export            # write bundle to .claude-shared/
+# Alice's machine, in the project
+claude-handoff export                 # lists her sessions, writes nothing
+claude-handoff export "upload"        # export the one whose title mentions "upload"
 git add .claude-shared/ && git commit -m "handoff" && git push
 
 # Neo's machine
 git pull
-claude-handoff import            # reconstruct sessions under ~/.claude/projects/
-claude --resume                  # pick Alice's session, keep going
+claude-handoff import                 # reconstruct sessions under ~/.claude/projects/
+claude --resume                       # pick Alice's session, keep going
 ```
 
-Alice's session shows up in Neo's `/resume` picker with its original
-title and 100% of the conversation history, tool calls, and subagent
-transcripts.
+There is no setup step. Alice's session shows up in Neo's `/resume`
+picker with its original title and 100% of the conversation history,
+tool calls, and subagent transcripts.
 
 **No shared repo?** Send one file instead:
 
 ```bash
 # sender
-claude-handoff export --session "upload" --archive fix-upload.handoff.tgz
+claude-handoff export "upload" -o fix-upload.handoff.tgz
 # ...send the file any way you like...
 
 # receiver, in their checkout of the project
-claude-handoff import --archive fix-upload.handoff.tgz
+claude-handoff import fix-upload.handoff.tgz
 ```
 
 The archive holds the same redacted bundle and is checksummed, so a
 damaged or half-downloaded file is refused instead of half-imported.
+
+<p align="center">
+  <img src="docs/demo-archive.svg" alt="Exporting a session to one file and importing it elsewhere, with no shared repository" width="900">
+</p>
 
 **Iteration.** The same session can ping-pong through the repo
 multiple times. After Neo resumes and keeps working, Neo runs
@@ -95,55 +97,53 @@ to the receiver's.
 
 ## Commands
 
-| Command                        | Description                                                               |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| `claude-handoff`               | Runs `status` by default                                                  |
-| `claude-handoff init`          | Create `.claude-shared/`, update `.gitignore`                             |
-| `claude-handoff export`        | Export local sessions to `.claude-shared/`                                |
-| `claude-handoff import`        | Import shared sessions to `~/.claude/projects/`                           |
-| `claude-handoff status`        | Show local vs shared sessions and freshness                               |
-| `claude-handoff list`          | List sessions in `.claude-shared/` (+ `--verbose`)                        |
-| `claude-handoff doctor`        | Check the setup: sessions, Claude Code version, bundles, redaction inputs |
-| `claude-handoff skill install` | Install a Claude Code skill so the agent can run handoffs when asked      |
+| Command                           | What it does                                                          |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `claude-handoff export [session]` | Export sessions; with nothing chosen, list them and write nothing     |
+| `claude-handoff import [file]`    | Import from `.claude-shared/`, or from an archive file                |
+| `claude-handoff status`           | Local vs shared sessions and what is not exported yet (`-v` for more) |
+| `claude-handoff doctor`           | Check the setup: sessions, Claude Code version, bundles, redaction    |
+| `claude-handoff skill install`    | Let Claude Code run handoffs when you ask it to                       |
 
-### Export options
+Running `claude-handoff` alone shows `status`.
 
-```
---session <id|title> Export sessions matching an ID prefix or title text
---last <n>          Export the last N sessions
---since <date>      Only export sessions started on/after this ISO date
---author <name>     Tag with author name (default: git user.name)
---dry-run           Show what would happen, write nothing
---archive <file>    Write one archive file to send directly, instead
-                    of .claude-shared/ in the repo
---no-redact         Skip redaction (requires --i-know-what-im-doing)
---no-env-scan       Don't scrub values found in .env files and
-                    secret-named environment variables
---strip-progress    Drop streaming progress records (smaller files)
---keep-signatures   Keep thinking.signature fields (default: strip to
-                    avoid API 400s after cross-machine resume)
---memory            Also export the project's auto-memory files
-                    (~/.claude/projects/<key>/memory/, minus MEMORY.md
-                    which Claude Code regenerates)
---force             Override fork detection and re-export even when
-                    the local session appears behind the shared bundle
-```
-
-### Import options
+### Choosing what to export
 
 ```
---session <id|title> Import sessions matching an ID prefix or title text
---dry-run         Preview path rewrites and destination
---overwrite       Replace existing local sessions with same ID
---archive <file>  Import from a file written by `export --archive`
+claude-handoff export "fix upload"   words from the title, or an ID prefix
+claude-handoff export -n 1           the most recent session (-n 3 for three)
+claude-handoff export --all          every session of this project
 ```
+
+Add `-o <file>` to write one archive file instead of `.claude-shared/`,
+`--memory` to include the project's auto-memory files (`MEMORY.md`
+excluded; Claude Code regenerates it), and `--dry-run` to preview.
+
+### Import
+
+`claude-handoff import` reads `.claude-shared/`; `claude-handoff import
+<file>` reads an archive. `--dry-run` previews.
 
 When the shared bundle is **ahead** of your local copy (teammate
-shared newer work), `import` auto-catches you up without
-`--overwrite`. When your local has **unshared** work (you resumed
-after last import), `import` skips by default and warns that
-`--overwrite` would discard the local changes. Pass `--overwrite`
-only when you mean to.
+shared newer work), `import` catches you up on its own. When your
+local copy has **unshared** work (you resumed after the last import),
+`import` skips it and says so; `--overwrite` discards the local
+changes and takes the bundle. Pass it only when you mean to.
+
+### Less common export options
+
+```
+--since <date>       only sessions started on or after an ISO date
+--author <name>      name recorded in the bundle (default: git user.name)
+--strip-progress     drop streaming progress records to shrink the bundle
+--keep-signatures    keep signed thinking blocks (default: strip them, to
+                     avoid API 400s after resuming under another API key)
+--force              export even if the shared bundle looks newer than
+                     your local copy
+--no-env-scan        do not scrub values found in .env files and
+                     secret-named environment variables
+--no-redact          turn redaction off; needs --i-know-what-im-doing too
+```
 
 ### Custom redaction patterns
 
@@ -253,7 +253,7 @@ git clone https://github.com/NeoAcar/claude-handoff
 cd claude-handoff
 npm install
 npm run build
-npm test               # vitest, ~225 tests
+npm test               # vitest, ~230 tests
 npm run lint           # prettier --check + tsc --noEmit
 npm link               # optional: make `claude-handoff` available globally
 ```

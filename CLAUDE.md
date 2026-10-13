@@ -18,12 +18,18 @@ npm run lint:fix      # Auto-fix formatting
 
 - TypeScript, Node 20+, ESM modules
 - CLI entry: `src/cli.ts` — uses `commander`
-- Commands live in `src/commands/{init,export,import,status,list}.ts`
+- Commands live in `src/commands/{export,import,archive,status,doctor,skill,init}.ts`
 - Core logic in `src/core/`:
-  - `paths.ts` — path rewriting (export/import), slug computation
-  - `redactor.ts` — secret detection and redaction
-  - `session.ts` — JSONL read/write, schema handling
+  - `paths.ts` — placeholder path rewriting (export/import)
+  - `store.ts` — Claude store discovery, slug computation, sidecars
+  - `redactor.ts` — secret patterns and the redaction engine
+  - `envSecrets.ts` — known secret values from `.env` files and the environment
+  - `sanitizeRecord.ts` — thinking signatures, account identity
+  - `session.ts` — JSONL read/write, session metadata
+  - `title.ts` — fallback session titles
   - `manifest.ts` — `.manifest.json` read/write
+  - `archive.ts` — single-file tar.gz archives with checksums
+  - `version.ts` — tool version and compatibility baselines
 - Tests mirror source: `src/core/paths.ts` → `test/core/paths.test.ts`
 - No runtime dependency beyond `commander` and native Node APIs unless justified in PR
 

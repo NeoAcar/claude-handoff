@@ -122,9 +122,10 @@ ranges that shipped them; git history has the details.
 
 ### 0.3.0 — Known-secret scrubbing, archives, doctor, skill
 
-`.env` / environment value scrubbing, wider key patterns, `--archive`
-single-file handoff with checksums, `doctor`, `skill install`,
-first-prompt titles. See `CHANGELOG.md`.
+`.env` / environment value scrubbing, wider key patterns, single-file
+handoff with checksums, `doctor`, `skill install`, first-prompt
+titles, and a simpler CLI (positional arguments, no init step, bare
+`export` lists). See `CHANGELOG.md`.
 
 ### 0.2.2 — Self-refreshing bundles
 
@@ -213,4 +214,4 @@ Informed by Codex analysis of the reference repo at `/tmp/codecli`
   (LLM-maintained; Claude Code rebuilds it). Worktrees share one
   memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-**Current test count:** 225 across 16 suites.
+**Current test count:** 229 across 17 suites.

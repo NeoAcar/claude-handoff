@@ -151,14 +151,12 @@ with open('$CLAUDE_PROJECTS/$ALICE_SLUG/$ALICE_SESSION_ID.jsonl') as f:
 "
 echo ""
 
-# --- Step 3: Run claude-handoff init + export from Alice's dir ---
+# --- Step 3: Run claude-handoff export from Alice's dir ---
 echo "=== STEP 3: Alice runs init + export ==="
 cd "$ALICE_DIR"
-echo "  Running: node $CLI init"
-node "$CLI" init
 echo ""
-echo "  Running: node $CLI export"
-node "$CLI" export
+echo "  Running: node $CLI export --all"
+node "$CLI" export --all
 echo ""
 
 # Verify export output
