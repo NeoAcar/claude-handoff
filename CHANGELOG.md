@@ -4,6 +4,61 @@ All notable changes to `@neoacar/claude-handoff`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0]
+
+Verified end-to-end against Claude Code 2.1.289.
+
+### Added
+
+- **Scrubbing of the project's own secrets.** Export reads the
+  project's `.env` files (templates such as `.env.example` excluded)
+  and secret-named environment variables, and removes those exact
+  values from everything it writes, marked `[REDACTED:env:KEY]`. This
+  catches secrets with no recognisable shape, which patterns cannot.
+  JSON-escaped and URL-encoded spellings are matched too. Short,
+  numeric and ordinary-looking values are left alone. Opt out with
+  `--no-env-scan`.
+- **More key formats.** OpenAI project / service-account / admin keys
+  (`sk-proj-…` was previously missed), GitHub fine-grained tokens,
+  Google API keys, Slack tokens and webhook URLs, generic `api_key` /
+  `secret` / `token` assignments, and passwords in non-HTTP connection
+  strings (`postgres://`, `redis://`, …).
+- **Single-file archives.** `export --archive <file>` writes the bundle
+  as one gzip tar instead of `.claude-shared/`; `import --archive <file>`
+  reads it. An index of SHA-256 checksums is verified before anything is
+  imported. For handoffs without a shared repo.
+- **`doctor`.** Read-only check: where the sessions are, whether your
+  Claude Code is newer than the last verified version, bundles written
+  by older versions, `.gitignore`, and what redaction has to work with.
+- **`skill install` / `skill print`.** A Claude Code skill so the agent
+  can run a handoff when asked. It never commits, pushes, or disables
+  redaction.
+
+### Changed
+
+- Sessions with no title record are labelled by the first thing the
+  user asked, with Claude Code's control blocks stripped, rather than
+  by the last prompt.
+- Custom patterns from `.claude-handoff-ignore` now run before the
+  built-in ones, so they label the match.
+- Bundles no longer record the sender's absolute project path
+  (`sourceProjectRoot`, `sourceGitRoot`).
+- Bundles written before 0.3.0 are rewritten on the next export.
+
+- All patterns are matched against the original text and overlapping
+  matches are merged. Applying them one after another could let one
+  pattern's marker cut another's match short and leave the tail of a
+  key in place.
+- `import` validates session IDs and paths from the manifest before
+  writing anything.
+
+### Fixed
+
+- Anthropic keys containing `_` were only partly redacted.
+- Redaction-log contexts could show a neighbouring secret that a later
+  pattern went on to redact; contexts now come from the finished text.
+- Lookbehind patterns went quadratic on very long runs of whitespace.
+
 ## [0.2.2]
 
 ### Added

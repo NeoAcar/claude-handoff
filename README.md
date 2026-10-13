@@ -50,6 +50,20 @@ Alice's session shows up in Neo's `/resume` picker with its original
 title and 100% of the conversation history, tool calls, and subagent
 transcripts.
 
+**No shared repo?** Send one file instead:
+
+```bash
+# sender
+claude-handoff export --session "upload" --archive fix-upload.handoff.tgz
+# ...send the file any way you like...
+
+# receiver, in their checkout of the project
+claude-handoff import --archive fix-upload.handoff.tgz
+```
+
+The archive holds the same redacted bundle and is checksummed, so a
+damaged or half-downloaded file is refused instead of half-imported.
+
 **Iteration.** The same session can ping-pong through the repo
 multiple times. After Neo resumes and keeps working, Neo runs
 `export` again and Alice imports the follow-up. Each round's
@@ -81,14 +95,16 @@ to the receiver's.
 
 ## Commands
 
-| Command                 | Description                                        |
-| ----------------------- | -------------------------------------------------- |
-| `claude-handoff`        | Runs `status` by default                           |
-| `claude-handoff init`   | Create `.claude-shared/`, update `.gitignore`      |
-| `claude-handoff export` | Export local sessions to `.claude-shared/`         |
-| `claude-handoff import` | Import shared sessions to `~/.claude/projects/`    |
-| `claude-handoff status` | Show local vs shared sessions and freshness        |
-| `claude-handoff list`   | List sessions in `.claude-shared/` (+ `--verbose`) |
+| Command                        | Description                                                               |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `claude-handoff`               | Runs `status` by default                                                  |
+| `claude-handoff init`          | Create `.claude-shared/`, update `.gitignore`                             |
+| `claude-handoff export`        | Export local sessions to `.claude-shared/`                                |
+| `claude-handoff import`        | Import shared sessions to `~/.claude/projects/`                           |
+| `claude-handoff status`        | Show local vs shared sessions and freshness                               |
+| `claude-handoff list`          | List sessions in `.claude-shared/` (+ `--verbose`)                        |
+| `claude-handoff doctor`        | Check the setup: sessions, Claude Code version, bundles, redaction inputs |
+| `claude-handoff skill install` | Install a Claude Code skill so the agent can run handoffs when asked      |
 
 ### Export options
 
@@ -98,7 +114,11 @@ to the receiver's.
 --since <date>      Only export sessions started on/after this ISO date
 --author <name>     Tag with author name (default: git user.name)
 --dry-run           Show what would happen, write nothing
+--archive <file>    Write one archive file to send directly, instead
+                    of .claude-shared/ in the repo
 --no-redact         Skip redaction (requires --i-know-what-im-doing)
+--no-env-scan       Don't scrub values found in .env files and
+                    secret-named environment variables
 --strip-progress    Drop streaming progress records (smaller files)
 --keep-signatures   Keep thinking.signature fields (default: strip to
                     avoid API 400s after cross-machine resume)
@@ -115,6 +135,7 @@ to the receiver's.
 --session <id|title> Import sessions matching an ID prefix or title text
 --dry-run         Preview path rewrites and destination
 --overwrite       Replace existing local sessions with same ID
+--archive <file>  Import from a file written by `export --archive`
 ```
 
 When the shared bundle is **ahead** of your local copy (teammate
@@ -131,6 +152,15 @@ per line (`#` for comments). Each pattern is applied on top of the
 built-in ones, with matches replaced by `[REDACTED:custom-N]`. Check
 it in so the whole team shares the same scrub rules.
 
+### Letting Claude Code do it
+
+`claude-handoff skill install` writes a skill to
+`~/.claude/skills/claude-handoff/`. After that you can say "hand this
+session off to a teammate" in Claude Code and the agent previews,
+exports and reports the redactions. It never commits, pushes, or turns
+redaction off; those stay with you. `claude-handoff skill print` shows
+the file without installing it.
+
 ## How it handles the tricky parts
 
 - **Path rewriting.** Absolute paths like `/home/alice/myapp/file.ts`
@@ -141,19 +171,32 @@ it in so the whole team shares the same scrub rules.
 - **Claude store keys.** Memory files and in-transcript references to
   `~/.claude/projects/<key>/...` go through a `{{CLAUDE_STORE}}`
   placeholder so they land at the receiver's key, not the sender's.
-- **Secret redaction.** 9 built-in patterns (AWS, GitHub, Anthropic,
-  OpenAI, bearer tokens, password assignments, user:pass URLs, PEM
-  blocks) replace matches with `[REDACTED:type]`. Export reports both
+- **Secret redaction.** 15 built-in patterns (AWS, GitHub classic and
+  fine-grained, Anthropic, OpenAI including `sk-proj-`, Google, Slack
+  tokens and webhooks, bearer tokens, password and `api_key` /
+  `secret` / `token` assignments, passwords in `https://` and
+  `postgres://`-style URLs, PEM blocks) replace matches with
+  `[REDACTED:type]`. Overlapping matches are merged into one
+  redaction, so a key is never left half-removed. Export reports both
   the count of unique secrets found and the total markers written; a
   redaction log lives at `.claude-handoff/redaction-log.json`
   (gitignored) for review.
+- **Your project's own secrets.** Patterns only know shapes; a
+  database password has none. Export reads the project's `.env` files
+  (not `.env.example` and friends) and secret-named environment
+  variables, and removes those exact values wherever they appear,
+  marked `[REDACTED:env:DB_PASSWORD]`. It knows the value as written,
+  JSON-escaped and URL-encoded; other encodings (base64, for one) are
+  not recognised. Values that are short, numeric,
+  or look like ordinary settings (`development`, a port, a path) are
+  left alone. `--no-env-scan` turns this off.
 - **Account identity scrubbing.** Recent Claude Code versions record
   the signed-in account's email and organization UUID inside the
   transcript. Export learns both from the session and scrubs them
   everywhere in the bundle (`[REDACTED:account-email]`, a nil UUID),
   reported as `account-email` / `account-org` in the redaction log.
   Bundles written by 0.2.0 or earlier still contain them; running
-  `export` with 0.2.2+ rewrites those bundles automatically. Anything
+  `export` with a current version rewrites those bundles automatically. Anything
   already committed stays in git history.
 - **Project store resolution.** Not a naive slug match — canonicalizes
   the project root (`realpath` + Unicode NFC) and, if the computed key
@@ -177,11 +220,16 @@ it in so the whole team shares the same scrub rules.
 - **No auto-commit.** The tool writes files; you run `git add` and
   `git commit` yourself. Always review `git diff .claude-shared/`
   before pushing.
-- **Never touches your source.** Only reads from `~/.claude/` and
-  writes to `.claude-shared/` and the receiver's `~/.claude/`.
-- **Redaction is a safety rail, not a guarantee.** Regex can't catch
-  every secret shape. Use `.claude-handoff-ignore` for project-specific
-  patterns. Always diff before committing.
+- **Never changes your source.** It reads `~/.claude/` and, for
+  redaction, the project's `.env` files; `.env` values are used in
+  memory only and are never written anywhere. It writes to
+  `.claude-shared/`, `.claude-handoff/` (local log), the receiver's
+  `~/.claude/`, and an archive file only where you name one.
+- **Redaction is a safety rail, not a guarantee.** Patterns can't catch
+  every secret shape, and the `.env` scan only knows the values on the
+  exporting machine. Use `.claude-handoff-ignore` for project-specific
+  patterns. Always diff before committing, and send an archive only to
+  people you would show the conversation to.
 
 ## Known limitations
 
@@ -205,7 +253,7 @@ git clone https://github.com/NeoAcar/claude-handoff
 cd claude-handoff
 npm install
 npm run build
-npm test               # vitest, ~145 tests
+npm test               # vitest, ~225 tests
 npm run lint           # prettier --check + tsc --noEmit
 npm link               # optional: make `claude-handoff` available globally
 ```
@@ -221,7 +269,8 @@ living on the original machine.
 claude-handoff covers the other case: the transcript itself moves, so
 a teammate (or you, on another machine) can `/resume` it there with the
 original machine switched off. Last verified end-to-end (export →
-import → `claude --resume`) against Claude Code 2.1.288.
+import → `claude --resume`) against Claude Code 2.1.289.
+`claude-handoff doctor` tells you if your Claude Code is newer than that.
 
 ## Related discussions
 

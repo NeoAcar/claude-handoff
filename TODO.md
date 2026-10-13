@@ -28,11 +28,10 @@ ranges that shipped them; git history has the details.
       reviewers will want before pulling a PR that touches
       `.claude-shared/`.
 
-- [ ] **`sourceProjectRoot` is an absolute path.** `metadata.json`
-      and `.manifest.json` store the sender's real project root
-      (home directory name included), unlike everything else in the
-      bundle. Nothing reads it on import. Store it as a placeholder
-      or drop it.
+- [ ] **More spellings of known values.** `.env` values are matched
+      as written, JSON-escaped and URL-encoded. Base64 (as in a Basic
+      auth header), shell-quoted and HTML-escaped forms are not, and
+      `.env` files above the project root (monorepos) are not read.
 
 ### Medium priority
 
@@ -84,12 +83,6 @@ ranges that shipped them; git history has the details.
 
 ### Low priority
 
-- [ ] **Single-file transport.** Ideas seen in the upstream threads
-      (claude-session-port, ccswim): pack one session into a tarball
-      or single file for cases with no shared repo. Could be
-      `export --archive <file>` / `import --archive <file>` on top of
-      the existing bundle.
-
 - [ ] **Desktop app registration.** claude-code-export-import also
       writes the Desktop app's `local_*.json` record so an imported
       session shows in its sidebar. Not inspected here yet — needs a
@@ -110,7 +103,6 @@ ranges that shipped them; git history has the details.
 ### Out of scope for now
 
 - [ ] Git hooks (auto-export on commit, auto-import on pull).
-- [ ] `claude-handoff doctor` cross-machine diagnostic.
 - [ ] Windows support — needs a test machine.
 - [ ] Long-path hash tolerance — the reference hashes paths that
       exceed some threshold instead of sluggifying. We don't know
@@ -127,6 +119,12 @@ ranges that shipped them; git history has the details.
 ---
 
 ## Completed
+
+### 0.3.0 — Known-secret scrubbing, archives, doctor, skill
+
+`.env` / environment value scrubbing, wider key patterns, `--archive`
+single-file handoff with checksums, `doctor`, `skill install`,
+first-prompt titles. See `CHANGELOG.md`.
 
 ### 0.2.2 — Self-refreshing bundles
 
@@ -215,5 +213,4 @@ Informed by Codex analysis of the reference repo at `/tmp/codecli`
   (LLM-maintained; Claude Code rebuilds it). Worktrees share one
   memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-**Current test count:** 148 across 9 suites, including four
-integration suites.
+**Current test count:** 225 across 16 suites.
