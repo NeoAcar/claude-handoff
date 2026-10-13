@@ -37,6 +37,8 @@ export interface SessionMeta {
   lastTimestamp?: string;
   recordCount: number;
   stats: StreamStats;
+  /** Claude Code version that wrote the most recent record carrying one. */
+  claudeCodeVersion?: string;
   /** Account identifiers Claude Code recorded in this transcript. */
   identity: AccountIdentity;
 }
@@ -180,6 +182,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
   let aiTitle: string | undefined;
   let firstPrompt: string | undefined;
   let lastPrompt: string | undefined;
+  let claudeCodeVersion: string | undefined;
   const emails = new Set<string>();
   const orgUuids = new Set<string>();
   let firstTimestamp: string | undefined;
@@ -196,6 +199,10 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
     if (record.timestamp) {
       if (!firstTimestamp) firstTimestamp = record.timestamp;
       lastTimestamp = record.timestamp;
+    }
+
+    if (typeof record.version === 'string') {
+      claudeCodeVersion = record.version;
     }
 
     if (record.type === 'custom-title') {
@@ -236,6 +243,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
     lastTimestamp,
     recordCount,
     stats,
+    claudeCodeVersion,
     identity: { emails: [...emails], orgUuids: [...orgUuids] },
   };
 }

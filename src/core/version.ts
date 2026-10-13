@@ -10,6 +10,13 @@ const require = createRequire(import.meta.url);
 export const TOOL_VERSION: string = (require('../../package.json') as { version: string }).version;
 
 /**
+ * Newest Claude Code version the export → import → `claude --resume`
+ * round-trip was checked against. The session format is undocumented, so
+ * anything newer is unverified rather than known-broken.
+ */
+export const LAST_VERIFIED_CLAUDE_CODE = '2.1.288';
+
+/**
  * Bundles written by a version older than this (or by one that didn't
  * record its version at all) are rewritten on the next export even if
  * the session is unchanged. Raise it whenever export starts removing

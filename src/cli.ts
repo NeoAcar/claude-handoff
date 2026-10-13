@@ -11,6 +11,7 @@ import { exportCommand } from './commands/export.js';
 import { importCommand } from './commands/import.js';
 import { statusCommand } from './commands/status.js';
 import { listCommand } from './commands/list.js';
+import { doctorCommand } from './commands/doctor.js';
 import { TOOL_VERSION } from './core/version.js';
 
 const program = new Command();
@@ -118,6 +119,13 @@ program.action(async () => {
     );
   });
 });
+
+program
+  .command('doctor')
+  .description('Check the local setup: sessions, Claude Code version, bundles, redaction inputs')
+  .action(async () => {
+    await run(() => doctorCommand(getProjectRoot()));
+  });
 
 function getProjectRoot(): string {
   return resolve(process.cwd());
