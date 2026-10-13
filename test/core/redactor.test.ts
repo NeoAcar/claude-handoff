@@ -88,10 +88,16 @@ describe('redactText — default patterns', () => {
     expect(hits.filter((h) => h.type === 'url-with-creds')).toHaveLength(0);
   });
 
-  it('still redacts creds with port in host', () => {
-    const { text } = redactText('postgres://admin:secretpw@db.internal/app');
-    // Note: this pattern is https?:// only, so postgres:// isn't matched.
-    expect(text).toContain('admin:secretpw');
+  it('redacts the password in non-http connection strings, keeping scheme and user', () => {
+    expect(redactText('postgres://admin:secretpw@db.internal:5432/app').text).toBe(
+      'postgres://admin:[REDACTED:credentials]@db.internal:5432/app',
+    );
+    expect(redactText('redis://default:p4ss@cache:6379').text).toBe(
+      'redis://default:[REDACTED:credentials]@cache:6379',
+    );
+    expect(redactText('ssh://git@github.com/org/repo.git').text).toBe(
+      'ssh://git@github.com/org/repo.git',
+    );
   });
 
   it('redacts creds when URL appears mid-sentence with trailing text', () => {
@@ -300,5 +306,73 @@ describe('markers left by earlier patterns', () => {
   it('inserts replacement text literally', () => {
     const odd = literalPattern('odd', 'needle', 'a$&b$1c', true);
     expect(redactText('x needle y', [odd]).text).toBe('x a$&b$1c y');
+  });
+});
+
+describe('overlapping matches', () => {
+  it('never leaves the tail of a key when a known value sits inside it', () => {
+    // The env literal matches the middle of an Anthropic key.
+    const env = literalPattern('env-value', 'abcd1234', '[REDACTED:env:DB_PASSWORD]', true);
+    const { text, hits } = redactText('key sk-ant-zzabcd1234yyyyyyyy end', [env]);
+    expect(text).toBe('key [REDACTED:anthropic-key] end');
+    expect(hits.map((h) => h.pattern)).toEqual(['anthropic-key']);
+  });
+
+  it('covers the union when a default match sits inside a longer known value', () => {
+    const env = literalPattern(
+      'env-value',
+      'XYZ-AKIAIOSFODNN7EXAMPLE-tail12345',
+      '[REDACTED:env:COMPOSITE_KEY]',
+      true,
+    );
+    expect(redactText('v=XYZ-AKIAIOSFODNN7EXAMPLE-tail12345.', [env]).text).toBe(
+      'v=[REDACTED:env:COMPOSITE_KEY].',
+    );
+  });
+
+  it('covers the union of partially overlapping matches', () => {
+    const a = literalPattern('a', 'hello wor', '[A]', true);
+    const b = literalPattern('b', 'lo world!!', '[B]', true);
+    expect(redactText('say hello world!! now', [a, b]).text).toBe('say [B] now');
+  });
+
+  it('logs context from the finished text, so neighbours appear as markers', () => {
+    const { hits } = redactText('a AKIAIOSFODNN7EXAMPLE b AKIAIOSFODNN7EXAMPLF c');
+    expect(hits).toHaveLength(2);
+    for (const hit of hits) expect(hit.context).not.toMatch(/AKIA[0-9A-Z]{16}/);
+    expect(hits[0].context).toBe('a [***] b [REDACTED:aws-key');
+  });
+});
+
+describe('pattern fixes from the 0.3.0 audit', () => {
+  const redacted = (text: string) => redactText(text).text;
+
+  it('redacts Anthropic keys that contain underscores, whole', () => {
+    expect(redacted('sk-ant-api03-AAAA_BBBB-cccc_dddd')).toBe('[REDACTED:anthropic-key]');
+  });
+
+  it('redacts SECRET_KEY-style assignments', () => {
+    expect(redacted('SECRET_KEY=Zx9Kq2Lm8Pw4Rt6Yv1Bn')).toBe('SECRET_KEY=[REDACTED:secret]');
+    expect(redacted('ACCESS_KEY_ID: Zx9Kq2Lm8Pw4Rt6Yv1Bn')).toBe(
+      'ACCESS_KEY_ID: [REDACTED:secret]',
+    );
+    const model = 'tokenizer_name = "bert-base-uncased-v2-finetuned"';
+    expect(redacted(model)).toBe(model);
+  });
+
+  it('redacts Slack webhook URLs and newer token prefixes', () => {
+    // Assembled at runtime: written out whole, these synthetic values trip
+    // GitHub's push protection.
+    const webhook = ['https://hooks.slack.com/services', 'T00000000', 'B00000000', 'X'.repeat(24)];
+    expect(redacted(webhook.join('/'))).toBe(
+      'https://hooks.slack.com/services/[REDACTED:slack-webhook]',
+    );
+    expect(redacted(['xoxe', '1', 'abcdefghijklmnop'].join('-'))).toBe('[REDACTED:slack-token]');
+  });
+
+  it('stays fast on very long whitespace runs', () => {
+    const started = Date.now();
+    redactText('password' + ' '.repeat(60_000) + 'x');
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 });

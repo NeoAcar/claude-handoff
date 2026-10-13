@@ -237,4 +237,38 @@ describe('modern record shapes round-trip', () => {
     });
     expect(await toolResult()).toContain(dbPassword);
   });
+
+  it('redacts a long first-prompt title before shortening it', async () => {
+    const alice = await seedAlice();
+    process.env.HOME = alice.home;
+    // The token starts inside the 80-character window and ends outside it.
+    const token = 'ghp_' + 'a1B2c3D4e5F6g7H8i9J0'.repeat(2);
+    const prompt = `${'please look at the deploy script and use this '.padEnd(60, '.')}${token} for auth`;
+    const sid = 'title-1111-2222-3333-444444444444';
+    await writeFile(
+      join(alice.store, `${sid}.jsonl`),
+      JSON.stringify({
+        type: 'user',
+        sessionId: sid,
+        cwd: alice.project,
+        uuid: 't1',
+        parentUuid: null,
+        timestamp: '2026-10-03T10:00:00.000Z',
+        message: { role: 'user', content: prompt },
+      }) + '\n',
+      'utf-8',
+    );
+
+    await exportCommand(alice.project, { dryRun: false, noRedact: false, iKnowWhatImDoing: false });
+
+    const sharedDir = join(alice.project, '.claude-shared');
+    const entry = (await readManifest(sharedDir))!.sessions.find((s) => s.sessionId === sid)!;
+    // The marker itself may be cut by the display limit; the token must be gone.
+    expect(entry.title).toContain('[REDACTED:github-');
+    expect(entry.title).not.toContain('ghp_');
+    const written =
+      (await readFile(join(sharedDir, '.manifest.json'), 'utf-8')) +
+      (await readFile(join(sharedDir, 'sessions', sid, 'metadata.json'), 'utf-8'));
+    expect(written).not.toContain('ghp_');
+  });
 });

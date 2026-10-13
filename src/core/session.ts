@@ -10,7 +10,7 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { extractAccountIdentity } from './sanitizeRecord.js';
 import type { AccountIdentity } from './sanitizeRecord.js';
-import { titleFromRecord } from './title.js';
+import { titleFromRecord, truncateTitle } from './title.js';
 
 // --- Types ---
 
@@ -30,7 +30,7 @@ export interface SessionMeta {
   customTitle?: string;
   /** Auto-generated title (`ai-title` record), written by newer Claude Code versions. */
   aiTitle?: string;
-  /** First thing the user actually typed, shortened (see `title.ts`). */
+  /** First line of the first thing the user actually typed (see `title.ts`). */
   firstPrompt?: string;
   lastPrompt?: string;
   firstTimestamp?: string;
@@ -43,14 +43,22 @@ export interface SessionMeta {
   identity: AccountIdentity;
 }
 
+type TitleFields = Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'firstPrompt' | 'lastPrompt'>;
+
 /**
- * Human-facing title for a session: the user's own title wins, then the
- * auto-generated one, then the first thing they asked, then the last prompt.
+ * A session's title, unshortened: the user's own title wins, then the
+ * auto-generated one, then the first thing they asked, then the last
+ * prompt. This is raw transcript text — redact it before it leaves the
+ * machine, and only then shorten it.
  */
-export function sessionTitle(
-  meta: Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'firstPrompt' | 'lastPrompt'>,
-): string | undefined {
+export function fullSessionTitle(meta: TitleFields): string | undefined {
   return meta.customTitle ?? meta.aiTitle ?? meta.firstPrompt ?? meta.lastPrompt;
+}
+
+/** A session's title shortened for display on this machine. */
+export function sessionTitle(meta: TitleFields): string | undefined {
+  const title = fullSessionTitle(meta);
+  return title === undefined ? undefined : truncateTitle(title);
 }
 
 /**

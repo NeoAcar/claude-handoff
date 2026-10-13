@@ -21,7 +21,8 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
   },
   {
     name: 'aws-secret',
-    regex: /(?<=(?:aws_secret_access_key|aws_secret|secret_key)\s*[:=]\s*)[A-Za-z0-9/+=]{40}/gi,
+    regex:
+      /(?<=(?:aws_secret_access_key|aws_secret|secret_key)\s{0,10}[:=]\s{0,10})[A-Za-z0-9/+=]{40}/gi,
     replacement: '[REDACTED:aws-secret]',
   },
   {
@@ -37,7 +38,7 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
   },
   {
     name: 'anthropic-key',
-    regex: /sk-ant-[A-Za-z0-9-]+/g,
+    regex: /sk-ant-[A-Za-z0-9_-]+/g,
     replacement: '[REDACTED:anthropic-key]',
   },
   {
@@ -54,8 +55,13 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
   },
   {
     name: 'slack-token',
-    regex: /xox[baprs]-[A-Za-z0-9-]{10,}/g,
+    regex: /xox[a-z]-[A-Za-z0-9-]{10,}/g,
     replacement: '[REDACTED:slack-token]',
+  },
+  {
+    name: 'slack-webhook',
+    regex: /hooks\.slack\.com\/services\/[A-Za-z0-9/_-]{20,}/g,
+    replacement: 'hooks.slack.com/services/[REDACTED:slack-webhook]',
   },
   {
     name: 'bearer',
@@ -64,16 +70,18 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
   },
   {
     name: 'password',
-    regex: /(?<=(?:password|passwd|pwd)\s*[:=]\s*)\S+/gi,
+    regex: /(?<=(?:password|passwd|pwd)\s{0,10}[:=]\s{0,10})\S+/gi,
     replacement: '[REDACTED:password]',
   },
   {
     name: 'secret-assignment',
-    // `api_key = "…"`, `"client_secret": "…"`, `TOKEN=…`. The value must be
-    // 16+ characters and contain a digit, so `token = parseAuthorizationHeader`
-    // and other plain identifiers on the right-hand side are left alone.
+    // `api_key = "…"`, `"client_secret": "…"`, `SECRET_KEY=…`, `TOKEN=…`.
+    // The value must be 16+ characters and contain a digit, so
+    // `token = parseAuthorizationHeader` and other plain identifiers on
+    // the right-hand side are left alone. Whitespace runs are bounded:
+    // an open-ended \s* inside a lookbehind goes quadratic on long blanks.
     regex:
-      /(?<=(?:api[_-]?key|secret|token|access[_-]?key)['"]?\s*[:=]\s*['"]?)(?=[A-Za-z0-9._/+-]*\d)[A-Za-z0-9._/+-]{16,}/gi,
+      /(?<=(?:api[_-]?key|secret|token|access[_-]?key)(?:[_-]?(?:key|id|value))?['"]?\s{0,10}[:=]\s{0,10}['"]?)(?=[A-Za-z0-9._/+-]*\d)[A-Za-z0-9._/+-]{16,}/gi,
     replacement: '[REDACTED:secret]',
   },
   {
@@ -85,6 +93,13 @@ const DEFAULT_PATTERNS: RedactionPattern[] = [
     // colon to non-separator characters so we only catch embedded credentials.
     regex: /https?:\/\/[^:/?#@\s]+:[^@/?#\s]+@/g,
     replacement: 'https://[REDACTED:credentials]@',
+  },
+  {
+    name: 'url-password',
+    // Any scheme (postgres://, redis://, amqp://, …): replace only the
+    // password, so the reader still sees which service and user it was.
+    regex: /(?<=\b[a-z][a-z0-9+.-]{1,20}:\/\/[^:/?#@\s]{1,100}:)[^@/?#\s]+(?=@)/gi,
+    replacement: '[REDACTED:credentials]',
   },
   {
     name: 'private-key',
@@ -107,56 +122,99 @@ export interface RedactionResult {
 
 // --- Core redaction ---
 
-/** A match that is nothing but a marker some earlier pattern wrote. */
+/** A match that is nothing but a marker from an earlier export. */
 const EXISTING_MARKER = /^\[REDACTED:[^\]\s]*\]$/;
 
 /**
  * Scan text for secrets and return redacted text plus a list of hits.
  */
 export function redactText(text: string, customPatterns: RedactionPattern[] = []): RedactionResult {
-  const hits: RedactionHit[] = [];
-  let result = text;
-
   // Caller-supplied patterns first: they are the specific ones (a project's
-  // own regexes, literal values learned from the session) and should name
-  // the hit before a generic default swallows the same text.
+  // own regexes, literal values learned from the session or the machine),
+  // so they win the label when two matches are equally long.
   const allPatterns = [...customPatterns, ...DEFAULT_PATTERNS];
 
-  for (const pattern of allPatterns) {
-    // Fresh regex per pass: the shared one carries lastIndex state.
+  // Every pattern is matched against the ORIGINAL text. Applying them one
+  // after another lets an earlier replacement cut a later pattern's match
+  // short — `sk-ant-…<env value>…tail` would lose only its head and middle,
+  // and the tail would ship.
+  const spans: Span[] = [];
+  allPatterns.forEach((pattern, order) => {
     const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
-    const parts: string[] = [];
-    let cursor = 0;
     let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(result)) !== null) {
+    while ((match = regex.exec(text)) !== null) {
       if (match[0].length === 0) {
         regex.lastIndex++;
         continue;
       }
-      // Greedy patterns (`password=\S+`) would otherwise re-redact a marker
-      // an earlier, more specific pattern left behind and discard its label.
+      // Text that is already a marker (a re-exported session) stays as is.
       if (EXISTING_MARKER.test(match[0])) continue;
-
-      const end = match.index + match[0].length;
-      hits.push({
-        pattern: pattern.name,
-        context:
-          result.slice(Math.max(0, match.index - 20), match.index) +
-          '[***]' +
-          result.slice(end, Math.min(result.length, end + 20)),
-      });
-      parts.push(result.slice(cursor, match.index), pattern.replacement);
-      cursor = end;
+      spans.push({ start: match.index, end: match.index + match[0].length, pattern, order });
     }
+  });
+  if (spans.length === 0) return { text, hits: [] };
 
-    if (cursor > 0) {
-      parts.push(result.slice(cursor));
-      result = parts.join('');
+  // Overlapping matches become one redaction covering their union, labelled
+  // by the longest match (earliest pattern on a tie).
+  spans.sort((a, b) => a.start - b.start || b.end - a.end || a.order - b.order);
+  const merged: Span[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && span.start < last.end) {
+      const lastLength = last.labelEnd! - last.labelStart!;
+      const spanLength = span.end - span.start;
+      if (spanLength > lastLength || (spanLength === lastLength && span.order < last.order)) {
+        last.pattern = span.pattern;
+        last.order = span.order;
+        last.labelStart = span.start;
+        last.labelEnd = span.end;
+      }
+      last.end = Math.max(last.end, span.end);
+    } else {
+      merged.push({ ...span, labelStart: span.start, labelEnd: span.end });
     }
   }
 
+  const parts: string[] = [];
+  const placed: Array<{ pattern: string; start: number; end: number }> = [];
+  let cursor = 0;
+  let outLength = 0;
+  for (const span of merged) {
+    const before = text.slice(cursor, span.start);
+    parts.push(before, span.pattern.replacement);
+    outLength += before.length;
+    placed.push({
+      pattern: span.pattern.name,
+      start: outLength,
+      end: outLength + span.pattern.replacement.length,
+    });
+    outLength += span.pattern.replacement.length;
+    cursor = span.end;
+  }
+  parts.push(text.slice(cursor));
+  const result = parts.join('');
+
+  // Context comes from the finished text, so a neighbouring secret shows
+  // up in the log as its marker, not in the clear.
+  const hits = placed.map(({ pattern, start, end }) => ({
+    pattern,
+    context:
+      result.slice(Math.max(0, start - 20), start) +
+      '[***]' +
+      result.slice(end, Math.min(result.length, end + 20)),
+  }));
+
   return { text: result, hits };
+}
+
+interface Span {
+  start: number;
+  end: number;
+  pattern: RedactionPattern;
+  order: number;
+  /** Extent of the match that currently supplies the label. */
+  labelStart?: number;
+  labelEnd?: number;
 }
 
 /**

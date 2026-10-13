@@ -42,16 +42,24 @@ export function stripLeadingControlBlocks(text: string): string {
   }
 }
 
-/** First non-empty line of the user's own text, shortened; undefined if there is none. */
+/**
+ * First non-empty line of the user's own text; undefined if there is
+ * none. Returned whole: shortening it here would cut a token in half
+ * before redaction ever saw it. Callers shorten with `truncateTitle`
+ * once the text is safe to show.
+ */
 export function titleFromUserText(text: string): string | undefined {
-  const line = stripLeadingControlBlocks(text)
+  return stripLeadingControlBlocks(text)
     .split('\n')
     .map((l) => l.trim())
     .find((l) => l.length > 0);
-  if (!line) return undefined;
-  return line.length > TITLE_MAX_LENGTH
-    ? line.slice(0, TITLE_MAX_LENGTH - 1).trimEnd() + '…'
-    : line;
+}
+
+/** Shorten a title for display. */
+export function truncateTitle(title: string): string {
+  return title.length > TITLE_MAX_LENGTH
+    ? title.slice(0, TITLE_MAX_LENGTH - 1).trimEnd() + '…'
+    : title;
 }
 
 /**

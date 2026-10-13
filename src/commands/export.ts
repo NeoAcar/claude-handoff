@@ -31,10 +31,12 @@ import {
 import type { SourceArtifact } from '../core/store.js';
 import {
   extractSessionMeta,
-  matchesSessionSelector,
+  fullSessionTitle,
   sessionTitle,
+  matchesSessionSelector,
   transformSession,
 } from '../core/session.js';
+import { truncateTitle } from '../core/title.js';
 import type { SessionMeta, SessionRecord } from '../core/session.js';
 import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
@@ -183,6 +185,13 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   // Get author name
   const author = options.author ?? (await getGitUserName()) ?? os.userInfo().username;
 
+  // Pass the resolved store dir into the rewriter so session JSONL
+  // references that point into ~/.claude/projects/<key>/... (memory
+  // files, subagent sidecars, `writtenPaths` entries) survive the
+  // Alice→Neo key change by round-tripping through {{CLAUDE_STORE}}.
+  const rewriteString = (s: string) =>
+    localToPortable(s, projectRoot, localHome, storeDir ?? undefined);
+
   // Secret values this machine already knows: the project's .env files
   // and secret-named environment variables. Matched literally, so they
   // are caught whatever they look like.
@@ -206,7 +215,13 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     for (const f of sessionFiles) {
       const meta = metaByFile.get(f)!;
       const sidecars = await collectSessionArtifacts(f);
-      const title = sessionTitle(meta) ?? '(untitled)';
+      // Same treatment the real export gives the title, minus the
+      // .claude-handoff-ignore patterns, which load after this point.
+      let title = rewriteString(fullSessionTitle(meta) ?? '(untitled)');
+      if (!options.noRedact) {
+        title = redactText(title, [...envPatterns, ...identityPatterns]).text;
+      }
+      title = truncateTitle(title);
       const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
       console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
     }
@@ -246,13 +261,6 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     totalRecovered: 0,
     totalSkipped: 0,
   };
-
-  // Pass the resolved store dir into the rewriter so session JSONL
-  // references that point into ~/.claude/projects/<key>/... (memory
-  // files, subagent sidecars, `writtenPaths` entries) survive the
-  // Alice→Neo key change by round-tripping through {{CLAUDE_STORE}}.
-  const rewriteString = (s: string) =>
-    localToPortable(s, projectRoot, localHome, storeDir ?? undefined);
 
   for (const sessionFile of sessionFiles) {
     const meta = metaByFile.get(sessionFile)!;
@@ -450,12 +458,15 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     // --- Per-bundle metadata sidecar ---
     // The title is copied into metadata.json and the manifest, so it
     // gets the same rewrite + redaction as the transcript it came from.
-    let title = rewriteString(sessionTitle(meta) ?? '(untitled)');
+    // Redact the whole title first and shorten it afterwards; the other
+    // order can cut a token so that no pattern recognises what is left.
+    let title = rewriteString(fullSessionTitle(meta) ?? '(untitled)');
     if (!options.noRedact) {
       const redactedTitle = redactText(title, sessionPatterns);
       title = redactedTitle.text;
       sessionHits.push(...redactedTitle.hits);
     }
+    title = truncateTitle(title);
     const metadataPayload = {
       sessionId,
       author,

@@ -4,6 +4,7 @@ import {
   titleFromRecord,
   titleFromUserText,
   TITLE_MAX_LENGTH,
+  truncateTitle,
 } from '../../src/core/title.js';
 import { sessionTitle } from '../../src/core/session.js';
 import type { SessionRecord } from '../../src/core/session.js';
@@ -35,10 +36,13 @@ describe('titleFromUserText', () => {
     );
   });
 
-  it('truncates long lines with an ellipsis', () => {
-    const title = titleFromUserText('word '.repeat(40))!;
-    expect(title.length).toBeLessThanOrEqual(TITLE_MAX_LENGTH);
-    expect(title.endsWith('…')).toBe(true);
+  it('returns the line whole; truncateTitle shortens it for display', () => {
+    const line = 'word '.repeat(40).trim();
+    expect(titleFromUserText(line)).toBe(line);
+    const short = truncateTitle(line);
+    expect(short.length).toBeLessThanOrEqual(TITLE_MAX_LENGTH);
+    expect(short.endsWith('…')).toBe(true);
+    expect(truncateTitle('short')).toBe('short');
   });
 
   it('returns undefined when only control blocks are present', () => {

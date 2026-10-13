@@ -21,9 +21,10 @@ export const LAST_VERIFIED_CLAUDE_CODE = '2.1.289';
  * record its version at all) are rewritten on the next export even if
  * the session is unchanged. Raise it whenever export starts removing
  * something it used to let through — 0.2.1 began scrubbing the account
- * email and org UUID, and 0.2.2 is the first version that stamps bundles.
+ * email and org UUID; 0.3.0 added `.env` values, more key formats, and
+ * stopped recording the sender's absolute project path.
  */
-export const REFRESH_BUNDLES_BEFORE = '0.2.2';
+export const REFRESH_BUNDLES_BEFORE = '0.3.0';
 
 /** True when `version` is missing or sorts before `baseline` (numeric x.y.z). */
 export function isOlderVersion(version: string | undefined, baseline: string): boolean {
