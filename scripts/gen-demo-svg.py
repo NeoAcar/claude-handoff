@@ -19,23 +19,37 @@ REDACTED = "Redacted: 5 unique secret(s), 8 marker(s) written across fields"
 
 # Each scene: (label, who, [steps]). A step is ("cmd", row, text, t0, t1) or
 # ("out", row, text, t, css_class). Times are seconds from the scene start.
+PICKER = [
+    ("out", 1, "Pick a session to export:", "o"),
+    ("out", 2, "❯ Fix login bug  (212 records + 2 sidecar(s), 5m ago)", "sel"),
+    ("out", 3, "  Refactor billing module  (88 records, 2d ago)", "o"),
+    ("out", 4, "  Update CI config  (41 records, 6d ago)", "o"),
+    ("out", 5, "↑/↓ move · Enter export · a all · q cancel", "d"),
+]
+
+
+def picker(t):
+    """The picker rows, all appearing at time t."""
+    return [(kind, row, text, t, css) for kind, row, text, css in PICKER]
+
+
 DEMOS = {
     "repo": {
-        "height": 400,
-        "label": "claude-handoff demo: Alice exports a Claude Code session and pushes it; "
+        "height": 484,
+        "label": "claude-handoff demo: Alice picks a Claude Code session to export and pushes it; "
         "Neo pulls, imports and resumes it.",
         "scenes": [
-            ("① Alice's machine — export", "alice", 12.4, [
-                ("cmd", 0, 'claude-handoff export "login bug"', 0.8, 2.4),
-                ("out", 1, KNOWN, 2.9, "n"),
-                ("out", 2, EXPORTED, 3.4, "o"),
-                ("out", 3, "Exported 1 session(s) to .claude-shared/", 3.7, "o"),
-                ("out", 4, REDACTED, 4.0, "w"),
-                ("out", 5, "  by pattern: env-value=4, account-email=2, github-token=1, account-org=1", 4.2, "w"),
-                ("out", 6, "Before committing, run: git diff .claude-shared/", 4.5, "d"),
-                ("cmd", 8, 'git add .claude-shared && git commit -m "handoff" && git push', 6.4, 9.2),
-                ("out", 9, "   3f2a1c9..8d4e7b2  main -> main", 9.8, "d"),
-                ("out", 11, "→ secrets scrubbed, the session now travels with the repo", 10.4, "n"),
+            ("① Alice's machine — export", "alice", 14.2, [
+                ("cmd", 0, "claude-handoff export", 0.8, 2.0),
+                *picker(2.5),
+                ("out", 6, KNOWN, 4.6, "n"),
+                ("out", 7, EXPORTED, 5.1, "o"),
+                ("out", 8, "Exported 1 session(s) to .claude-shared/", 5.4, "o"),
+                ("out", 9, REDACTED, 5.7, "w"),
+                ("out", 10, "  by pattern: env-value=4, account-email=2, github-token=1, account-org=1", 5.9, "w"),
+                ("cmd", 12, 'git add .claude-shared && git commit -m "handoff" && git push', 7.8, 10.6),
+                ("out", 13, "   3f2a1c9..8d4e7b2  main -> main", 11.2, "d"),
+                ("out", 15, "→ secrets scrubbed, the session now travels with the repo", 11.8, "n"),
             ]),
             ("② Neo's machine — import &amp; resume", "neo", 11.8, [
                 ("cmd", 0, "git pull", 0.7, 1.3),
@@ -55,22 +69,22 @@ DEMOS = {
         "label": "claude-handoff demo: exporting a session to a single file and importing it "
         "elsewhere, with no shared repository.",
         "scenes": [
-            ("① Sender — no shared repo", "alice", 9.2, [
-                ("cmd", 0, 'claude-handoff export "login bug" -o login-bug.handoff.tgz', 0.8, 3.2),
-                ("out", 1, KNOWN, 3.7, "n"),
-                ("out", 2, EXPORTED, 4.2, "o"),
-                ("out", 3, "Exported 1 session(s)", 4.5, "o"),
-                ("out", 4, REDACTED, 4.8, "w"),
-                ("out", 5, "Wrote /home/alice/myproject/login-bug.handoff.tgz (148.3 KB)", 5.3, "o"),
-                ("out", 7, "→ one checksummed file: send it any way you like", 6.4, "n"),
+            ("① Sender — no shared repo", "alice", 8.6, [
+                ("cmd", 0, "claude-handoff export -n 1 -o", 0.8, 2.4),
+                ("out", 1, KNOWN, 2.9, "n"),
+                ("out", 2, EXPORTED, 3.4, "o"),
+                ("out", 3, "Exported 1 session(s)", 3.7, "o"),
+                ("out", 4, REDACTED, 4.0, "w"),
+                ("out", 5, "Wrote /home/alice/myproject/fix-login-bug.handoff (148.3 KB)", 4.5, "o"),
+                ("out", 7, "→ one checksummed file: send it any way you like", 5.6, "n"),
             ]),
-            ("② Receiver — import &amp; resume", "neo", 9.8, [
-                ("cmd", 0, "claude-handoff import login-bug.handoff.tgz", 0.7, 2.6),
-                ("out", 1, "Archive verified: 6 file(s), written by claude-handoff 0.3.0", 3.1, "n"),
-                ("out", 2, IMPORTED, 3.6, "o"),
-                ("out", 3, "Imported 1 session(s)", 3.9, "o"),
-                ("cmd", 5, f"claude --resume {SID}", 4.9, 6.7),
-                ("out", 7, "✓ “Fix login bug” resumes with its full history — no repo involved", 7.4, "ok"),
+            ("② Receiver — import &amp; resume", "neo", 9.6, [
+                ("cmd", 0, "claude-handoff import fix-login-bug.handoff", 0.7, 2.5),
+                ("out", 1, "Archive verified: 6 file(s), written by claude-handoff 0.3.0", 3.0, "n"),
+                ("out", 2, IMPORTED, 3.5, "o"),
+                ("out", 3, "Imported 1 session(s)", 3.8, "o"),
+                ("cmd", 5, f"claude --resume {SID}", 4.8, 6.6),
+                ("out", 7, "✓ “Fix login bug” resumes with its full history — no repo involved", 7.3, "ok"),
             ]),
         ],
     },
@@ -151,7 +165,7 @@ def build(demo, static):
 <style>
 text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: {FS}px; }}
 .o {{ fill: #c9d1d9; }} .d {{ fill: #8b949e; }} .w {{ fill: #e3b341; }} .c {{ fill: #f0f6fc; }}
-.n {{ fill: #79c0ff; }} .ok {{ fill: #56d364; font-weight: 600; }}
+.n {{ fill: #79c0ff; }} .ok {{ fill: #56d364; font-weight: 600; }} .sel {{ fill: #f0f6fc; font-weight: 700; }}
 .p {{ font-weight: 600; }} .alice {{ fill: #f778ba; }} .neo {{ fill: #39c5cf; }}
 .tab {{ fill: #c9d1d9; font-size: 13px; font-weight: 600; }} .cur {{ fill: #c9d1d9; }}
 </style>

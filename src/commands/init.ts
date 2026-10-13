@@ -2,24 +2,27 @@
  * Project setup for claude-handoff.
  *
  * There is nothing to configure: the only setup is making sure the
- * tool's local directory (which holds the redaction log) can't be
- * committed. `export` does this itself on first use; the `init` command
+ * tool's local directory (which holds the redaction log) and archive
+ * files can't be committed. `export` does this itself on first use; the `init` command
  * remains for anyone who wants to do it up front.
  */
 
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const GITIGNORE_ENTRY = '.claude-handoff/';
+/** Default extension of archive files written by `export -o`. */
+export const ARCHIVE_EXTENSION = '.handoff';
+
+/** Things the tool writes into a project that must never be committed. */
+const GITIGNORE_ENTRIES = ['.claude-handoff/', `*${ARCHIVE_EXTENSION}`];
 
 /**
- * Make sure `.claude-handoff/` exists and is git-ignored. Returns a line
- * describing each change made, empty when everything was already in
- * place. `.gitignore` is only touched in a git repository, and only
- * appended to.
+ * Make sure `.claude-handoff/` exists and that it and archive files are
+ * git-ignored. Returns a line describing each change made, empty when
+ * everything was already in place. `.gitignore` is only touched in a
+ * git repository, and only appended to.
  */
 export async function ensureLocalDirIgnored(projectRoot: string): Promise<string[]> {
-  const changes: string[] = [];
   await mkdir(path.join(projectRoot, '.claude-handoff'), { recursive: true });
 
   const gitignorePath = path.join(projectRoot, '.gitignore');
@@ -30,19 +33,25 @@ export async function ensureLocalDirIgnored(projectRoot: string): Promise<string
     // no .gitignore
   }
   if (content === undefined && !(await exists(path.join(projectRoot, '.git')))) {
-    return changes; // not a git repository: nothing to protect against
+    return []; // not a git repository: nothing to protect against
   }
 
-  const lines = (content ?? '').split(/\r?\n/).map((l) => l.trim());
-  if (!lines.includes(GITIGNORE_ENTRY) && !lines.includes('.claude-handoff')) {
-    const separator = content && !content.endsWith('\n') ? '\n' : '';
-    const addition = `${separator}\n# claude-handoff local state\n${GITIGNORE_ENTRY}\n`;
-    await writeFile(gitignorePath, (content ?? '') + addition, 'utf-8');
-    changes.push(
-      `Added ${GITIGNORE_ENTRY} to .gitignore (keeps the local redaction log out of git)`,
-    );
-  }
-  return changes;
+  const lines = new Set((content ?? '').split(/\r?\n/).map((l) => l.trim()));
+  const missing = GITIGNORE_ENTRIES.filter(
+    (entry) => !lines.has(entry) && !lines.has(entry.replace(/\/$/, '')),
+  );
+  if (missing.length === 0) return [];
+
+  const separator = content && !content.endsWith('\n') ? '\n' : '';
+  const heading = lines.has('# claude-handoff local state')
+    ? ''
+    : '\n# claude-handoff local state\n';
+  await writeFile(
+    gitignorePath,
+    `${content ?? ''}${separator}${heading}${missing.join('\n')}\n`,
+    'utf-8',
+  );
+  return [`Added ${missing.join(', ')} to .gitignore (keeps local logs and archives out of git)`];
 }
 
 /** Write the explanatory README into `.claude-shared/` if it isn't there. */

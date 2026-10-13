@@ -19,7 +19,7 @@ then shows the shared session with its original title and full
 history intact.
 
 <p align="center">
-  <img src="docs/demo.svg" alt="Alice exports a Claude Code session and pushes it; Neo pulls, imports and resumes it" width="900">
+  <img src="docs/demo.svg" alt="Alice picks a Claude Code session to export and pushes it; Neo pulls, imports and resumes it" width="900">
 </p>
 
 ## Install
@@ -34,8 +34,7 @@ Then run `claude-handoff` from any project directory.
 
 ```bash
 # Alice's machine, in the project
-claude-handoff export                 # lists her sessions, writes nothing
-claude-handoff export "login bug"     # export the session titled "Fix login bug"
+claude-handoff export                 # pick a session from the list
 git add .claude-shared/ && git commit -m "handoff" && git push
 
 # Neo's machine
@@ -44,22 +43,23 @@ claude-handoff import                 # reconstruct sessions under ~/.claude/pro
 claude --resume                       # pick Alice's session, keep going
 ```
 
-There is no setup step. Alice's session shows up in Neo's `/resume`
-picker with its original title and 100% of the conversation history,
-tool calls, and subagent transcripts.
+There is no setup step. `export` shows your sessions by title, the way
+`claude --resume` does; arrow keys and Enter choose one. Alice's session
+then shows up in Neo's `/resume` picker with its original title and
+100% of the conversation history, tool calls, and subagent transcripts.
 
 **No shared repo?** Send one file instead:
 
 ```bash
 # sender
-claude-handoff export "login bug" -o login-bug.handoff.tgz
+claude-handoff export -o              # pick a session; writes <its-title>.handoff
 # ...send the file any way you like...
 
 # receiver, in their checkout of the project
-claude-handoff import login-bug.handoff.tgz
+claude-handoff import fix-login-bug.handoff
 ```
 
-The archive holds the same redacted bundle and is checksummed, so a
+The file holds the same redacted bundle and is checksummed, so a
 damaged or half-downloaded file is refused instead of half-imported.
 
 <p align="center">
@@ -99,8 +99,8 @@ to the receiver's.
 
 | Command                           | What it does                                                          |
 | --------------------------------- | --------------------------------------------------------------------- |
-| `claude-handoff export [session]` | Export sessions; with nothing chosen, list them and write nothing     |
-| `claude-handoff import [file]`    | Import from `.claude-shared/`, or from an archive file                |
+| `claude-handoff export [session]` | Export sessions; with nothing chosen, pick from a list                |
+| `claude-handoff import [file]`    | Import from `.claude-shared/`, or from a `.handoff` file              |
 | `claude-handoff status`           | Local vs shared sessions and what is not exported yet (`-v` for more) |
 | `claude-handoff doctor`           | Check the setup: sessions, Claude Code version, bundles, redaction    |
 | `claude-handoff skill install`    | Let Claude Code run handoffs when you ask it to                       |
@@ -110,19 +110,28 @@ Running `claude-handoff` alone shows `status`.
 ### Choosing what to export
 
 ```
-claude-handoff export "login bug"   words from the title, or an ID prefix
-claude-handoff export -n 1           the most recent session (-n 3 for three)
-claude-handoff export --all          every session of this project
+claude-handoff export                      pick from a list (arrow keys, Enter)
+claude-handoff export "<title words>"      sessions whose title contains these words
+claude-handoff export -n 1                 the most recent session (-n 3 for three)
+claude-handoff export --all                every session of this project
 ```
 
-Add `-o <file>` to write one archive file instead of `.claude-shared/`,
+A session's title is the one `claude --resume` shows: the name you gave
+it, else the one Claude Code generated, else the first thing you asked.
+An ID prefix works in place of title words. When the output isn't a
+terminal (a script, or Claude Code running the command), a bare
+`export` prints the list and writes nothing.
+
+Add `-o` to write one `.handoff` file instead of `.claude-shared/` — it
+is named after the session, or `-o <name>` names it yourself. Add
 `--memory` to include the project's auto-memory files (`MEMORY.md`
 excluded; Claude Code regenerates it), and `--dry-run` to preview.
 
 ### Import
 
 `claude-handoff import` reads `.claude-shared/`; `claude-handoff import
-<file>` reads an archive. `--dry-run` previews.
+<file>` reads a `.handoff` file (the extension may be left off).
+`--dry-run` previews.
 
 When the shared bundle is **ahead** of your local copy (teammate
 shared newer work), `import` catches you up on its own. When your
@@ -253,7 +262,7 @@ git clone https://github.com/NeoAcar/claude-handoff
 cd claude-handoff
 npm install
 npm run build
-npm test               # vitest, ~230 tests
+npm test               # vitest, ~240 tests
 npm run lint           # prettier --check + tsc --noEmit
 npm link               # optional: make `claude-handoff` available globally
 ```

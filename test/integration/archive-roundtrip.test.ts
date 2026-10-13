@@ -7,7 +7,11 @@ import { access, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { exportArchiveCommand, importArchiveCommand } from '../../src/commands/archive.js';
+import {
+  archiveStem,
+  exportArchiveCommand,
+  importArchiveCommand,
+} from '../../src/commands/archive.js';
 import { exportCommand } from '../../src/commands/export.js';
 import { importCommand } from '../../src/commands/import.js';
 import { sanitizeProjectKey } from '../../src/core/store.js';
@@ -146,6 +150,44 @@ describe('archive round-trip', () => {
       /not a usable claude-handoff archive/,
     );
     expect(await exists(join(neoHome, '.claude'))).toBe(false);
+  });
+});
+
+describe('archive naming', () => {
+  it('names the file after the session when no name is given', async () => {
+    const alice = await seedAlice();
+    process.env.HOME = alice.home;
+    await exportArchiveCommand(alice.project, undefined, exportOptions);
+    expect(await exists(join(alice.project, 'archive-handoff.handoff'))).toBe(true);
+
+    // A second run picks a free name instead of overwriting.
+    await exportArchiveCommand(alice.project, undefined, exportOptions);
+    expect(await exists(join(alice.project, 'archive-handoff-2.handoff'))).toBe(true);
+  });
+
+  it('adds the default extension to a bare name, on export and on import', async () => {
+    const alice = await seedAlice();
+    process.env.HOME = alice.home;
+    await exportArchiveCommand(alice.project, join(scratch, 'for-neo'), exportOptions);
+    expect(await exists(join(scratch, 'for-neo.handoff'))).toBe(true);
+
+    const neoHome = join(scratch, 'neo-home');
+    const neoProject = join(neoHome, 'dev', 'app');
+    await mkdir(neoProject, { recursive: true });
+    process.env.HOME = neoHome;
+    await importArchiveCommand(neoProject, join(scratch, 'for-neo'), importOptions);
+    const neoStore = join(neoHome, '.claude', 'projects', sanitizeProjectKey(neoProject));
+    expect(await exists(join(neoStore, `${SESSION_ID}.jsonl`))).toBe(true);
+  });
+
+  it('builds file names from titles without leaking markers or odd characters', () => {
+    expect(archiveStem('Fix login bug')).toBe('fix-login-bug');
+    expect(archiveStem('Use [REDACTED:github-token] for CI/CD — şifre!')).toBe(
+      'use-for-ci-cd-sifre',
+    );
+    expect(archiveStem('   ')).toBe('session');
+    expect(archiveStem(undefined)).toBe('session');
+    expect(archiveStem('x'.repeat(100)).length).toBe(40);
   });
 });
 

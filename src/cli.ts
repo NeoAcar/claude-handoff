@@ -13,6 +13,7 @@ import { statusCommand } from './commands/status.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportArchiveCommand, importArchiveCommand } from './commands/archive.js';
 import { skillInstallCommand, skillPrintCommand } from './commands/skill.js';
+import { canPickInteractively, pickInteractively } from './commands/picker.js';
 import { TOOL_VERSION } from './core/version.js';
 
 const program = new Command();
@@ -26,11 +27,14 @@ program
   .command('export [session]')
   .description(
     'Export sessions for a handoff. [session] is words from a title or an ID prefix; ' +
-      'with nothing chosen, lists the sessions and writes nothing.',
+      'with nothing chosen, shows the sessions to pick from.',
   )
   .option('-n, --last <n>', 'Export the N most recent sessions', parseInt)
   .option('--all', 'Export every session of this project', false)
-  .option('-o, --archive <file>', 'Write one file to send directly, instead of .claude-shared/')
+  .option(
+    '-o, --archive [file]',
+    'Write one file to send directly, instead of .claude-shared/ (named after the session if no name is given)',
+  )
   .option('--memory', "Also export the project's auto-memory files", false)
   .option('--dry-run', 'Show what would be exported, write nothing', false)
   .addOption(new Option('--session <id|title>').hideHelp())
@@ -73,9 +77,18 @@ program
         includeMemory: opts.memory,
         force: opts.force,
         envScan: opts.envScan,
+        // On a terminal a bare export offers a picker; scripts and agents
+        // get the plain listing.
+        pick: canPickInteractively()
+          ? (labels: string[]) => pickInteractively('Pick a session to export:', labels)
+          : undefined,
       };
-      if (opts.archive) await exportArchiveCommand(getProjectRoot(), opts.archive, options);
-      else await exportCommand(getProjectRoot(), options);
+      if (opts.archive !== undefined) {
+        const file = typeof opts.archive === 'string' ? opts.archive : undefined;
+        await exportArchiveCommand(getProjectRoot(), file, options);
+      } else {
+        await exportCommand(getProjectRoot(), options);
+      }
     });
   });
 

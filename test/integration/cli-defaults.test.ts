@@ -97,7 +97,7 @@ describe('first-export setup', () => {
     await exportCommand(project, { ...base, all: true });
 
     expect(await readFile(join(project, '.gitignore'), 'utf-8')).toBe(
-      'node_modules/\n\n# claude-handoff local state\n.claude-handoff/\n',
+      'node_modules/\n\n# claude-handoff local state\n.claude-handoff/\n*.handoff\n',
     );
     expect(await exists(join(project, '.claude-shared', 'README.md'))).toBe(true);
   });
@@ -110,7 +110,50 @@ describe('first-export setup', () => {
     expect(await ensureLocalDirIgnored(project)).toHaveLength(1);
     expect(await ensureLocalDirIgnored(project)).toEqual([]);
     expect(await readFile(join(project, '.gitignore'), 'utf-8')).toBe(
-      '\n# claude-handoff local state\n.claude-handoff/\n',
+      '\n# claude-handoff local state\n.claude-handoff/\n*.handoff\n',
     );
+  });
+
+  it('adds only what an older setup is missing', async () => {
+    await mkdir(join(project, '.git'));
+    await writeFile(
+      join(project, '.gitignore'),
+      '# claude-handoff local state\n.claude-handoff/\n',
+    );
+    expect(await ensureLocalDirIgnored(project)).toHaveLength(1);
+    expect(await readFile(join(project, '.gitignore'), 'utf-8')).toBe(
+      '# claude-handoff local state\n.claude-handoff/\n*.handoff\n',
+    );
+  });
+});
+
+describe('picking interactively', () => {
+  it('exports what the picker returns and nothing on cancel', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const seen: string[][] = [];
+    const pickSecond = async (labels: string[]) => {
+      seen.push(labels);
+      return [labels.findIndex((l) => l.startsWith('Refactor billing'))];
+    };
+
+    expect(await exportCommand(project, { ...base, pick: pickSecond })).toBe(1);
+    expect(seen[0]).toHaveLength(2);
+    expect(seen[0].every((l) => /\(\d+ records, .+ ago\)$/.test(l))).toBe(true);
+    const manifest = JSON.parse(
+      await readFile(join(project, '.claude-shared', '.manifest.json'), 'utf-8'),
+    );
+    expect(manifest.sessions.map((s: { title: string }) => s.title)).toEqual(['Refactor billing']);
+
+    await rm(join(project, '.claude-shared'), { recursive: true });
+    expect(await exportCommand(project, { ...base, pick: async () => null })).toBe(0);
+    expect(await exists(join(project, '.claude-shared'))).toBe(false);
+  });
+
+  it('is skipped when something was chosen on the command line, and on a dry run', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const pick = vi.fn(async () => [0]);
+    await exportCommand(project, { ...base, session: 'billing', pick });
+    await exportCommand(project, { ...base, dryRun: true, pick });
+    expect(pick).not.toHaveBeenCalled();
   });
 });

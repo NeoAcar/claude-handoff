@@ -147,7 +147,7 @@ function humanSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function humanAge(mtimeMs: number): string {
+export function humanAge(mtimeMs: number): string {
   const deltaSec = Math.max(0, (Date.now() - mtimeMs) / 1000);
   if (deltaSec < 60) return `${Math.round(deltaSec)}s ago`;
   if (deltaSec < 3600) return `${Math.round(deltaSec / 60)}m ago`;

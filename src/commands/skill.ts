@@ -29,10 +29,10 @@ If the command is missing, tell the user to install it with \`npm install -g @ne
 1. Ask which route the user wants if they haven't said:
    - **Through the repo** (teammates who share it): writes \`.claude-shared/\`, which the user commits.
    - **As one file** (no shared repo): writes an archive the user sends however they like.
-2. See what there is: \`claude-handoff export\` with nothing else lists the project's sessions and writes nothing. Show the user the list and agree on which one.
+2. See what there is: \`claude-handoff export\` with nothing else lists the project's sessions and writes nothing (you are not on an interactive terminal, so no picker appears). Show the user the list and agree on which one.
 3. Export it, naming the session by a few words of its title (or \`-n 1\` for the most recent):
    - repo: \`claude-handoff export "<title words>"\`
-   - file: \`claude-handoff export "<title words>" -o <name>.handoff.tgz\`
+   - file: \`claude-handoff export "<title words>" -o\` — writes \`<session-title>.handoff\` in the project directory and prints its path
 4. Report what the command printed: which sessions, how many redactions and of which kinds.
 5. For the repo route, tell the user to review \`git diff .claude-shared/\` and commit it themselves.
 

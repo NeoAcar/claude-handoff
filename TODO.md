@@ -88,9 +88,6 @@ ranges that shipped them; git history has the details.
       session shows in its sidebar. Not inspected here yet — needs a
       Phase-0-style look at a real file before any code.
 
-- [ ] **Interactive picker for export.** Checkbox UI for selecting
-      sessions. Nice-to-have; no real pain point yet.
-
 - [ ] **HANDOFF.md generator.** Auto-generate a human-readable
       summary with `<!-- MANUAL -->` sections preserved across
       regenerations. Deferred because current session titles
@@ -214,4 +211,4 @@ Informed by Codex analysis of the reference repo at `/tmp/codecli`
   (LLM-maintained; Claude Code rebuilds it). Worktrees share one
   memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-**Current test count:** 229 across 17 suites.
+**Current test count:** 240 across 18 suites.

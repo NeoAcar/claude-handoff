@@ -23,9 +23,9 @@ Verified end-to-end against Claude Code 2.1.289.
   Google API keys, Slack tokens and webhook URLs, generic `api_key` /
   `secret` / `token` assignments, and passwords in non-HTTP connection
   strings (`postgres://`, `redis://`, …).
-- **Single-file archives.** `export --archive <file>` writes the bundle
-  as one gzip tar instead of `.claude-shared/`; `import --archive <file>`
-  reads it. An index of SHA-256 checksums is verified before anything is
+- **Single-file archives.** `export -o` writes the bundle as one
+  `.handoff` file (a gzip tar) instead of `.claude-shared/`; `import
+<file>` reads it. An index of SHA-256 checksums is verified before anything is
   imported. For handoffs without a shared repo.
 - **`doctor`.** Read-only check: where the sessions are, whether your
   Claude Code is newer than the last verified version, bundles written
@@ -38,11 +38,17 @@ Verified end-to-end against Claude Code 2.1.289.
 
 - **Simpler commands.** `export [session]` and `import [file]` take
   what used to be `--session` and `--archive` as plain arguments
-  (`export "login bug" -o handoff.tgz`, `import handoff.tgz`). `-n` is
-  short for `--last`.
-- **A bare `export` no longer writes every session.** It lists them
-  and stops; a title, `-n`, or `--all` chooses. **Breaking** for
-  scripts that relied on the old behaviour: use `export --all`.
+  (`export "login bug"`, `import fix-login-bug.handoff`). `-n` is short
+  for `--last`, `-o` for `--archive`.
+- **A bare `export` no longer writes every session.** On a terminal it
+  shows the sessions by title to pick from, like `claude --resume`;
+  elsewhere it lists them and stops. A title, `-n`, or `--all` skips
+  the picker. **Breaking** for scripts that relied on the old
+  behaviour: use `export --all`.
+- **Archives name themselves.** `export -o` with no file name writes
+  `<session-title>.handoff`; `import` accepts the name with or without
+  the extension. `*.handoff` is git-ignored along with
+  `.claude-handoff/`.
 - **No setup step.** The first export adds `.claude-handoff/` to
   `.gitignore` itself (in a git repository). `init` still works but is
   no longer needed.

@@ -42,6 +42,7 @@ import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sani
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import { collectEnvSecrets, envRedactionPatterns } from '../core/envSecrets.js';
 import { ensureLocalDirIgnored, ensureSharedReadme } from './init.js';
+import { humanAge } from './status.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
@@ -96,6 +97,13 @@ export interface ExportOptions {
    * Off for programmatic callers, where no filter means everything.
    */
   requireSelection?: boolean;
+  /**
+   * Ask the user which sessions to export when nothing was chosen.
+   * Receives one label per session (newest first) and resolves to the
+   * chosen indexes, or null to cancel. Without it, a bare export just
+   * lists the sessions.
+   */
+  pick?: (labels: string[]) => Promise<number[] | null>;
 }
 
 interface ExportResult {
@@ -227,30 +235,48 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     options.last === undefined &&
     options.since === undefined;
 
-  // Preview mode
-  if (options.dryRun || nothingChosen) {
+  // One display row per session: the title as the receiver will see it
+  // (rewritten and redacted, minus the .claude-handoff-ignore patterns,
+  // which load later), then size hints.
+  const describe = async (f: string): Promise<{ title: string; detail: string }> => {
+    const meta = metaByFile.get(f)!;
+    let title = rewriteString(fullSessionTitle(meta) ?? '(untitled)');
+    if (!options.noRedact) {
+      title = redactText(title, [...envPatterns, ...identityPatterns]).text;
+    }
+    const sidecars = await collectSessionArtifacts(f);
+    const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
+    return { title: truncateTitle(title), detail: `${meta.recordCount} records${sidecarNote}` };
+  };
+
+  // Nothing chosen, on a terminal: let the user pick, like `claude --resume`.
+  if (nothingChosen && !options.dryRun && options.pick) {
+    const labels: string[] = [];
+    for (const f of sessionFiles) {
+      const { title, detail } = await describe(f);
+      labels.push(`${title}  (${detail}, ${humanAge((await stat(f)).mtimeMs)})`);
+    }
+    const chosen = await options.pick(labels);
+    if (chosen === null || chosen.length === 0) {
+      console.log('Nothing exported.');
+      return 0;
+    }
+    sessionFiles = chosen.map((i) => sessionFiles[i]);
+  } else if (options.dryRun || nothingChosen) {
+    // Preview mode
     console.log(
       nothingChosen
         ? `${sessionFiles.length} session(s) in this project, newest first:\n`
         : `Would export ${sessionFiles.length} session(s) as "${author}":\n`,
     );
     for (const f of sessionFiles) {
-      const meta = metaByFile.get(f)!;
-      const sidecars = await collectSessionArtifacts(f);
-      // Same treatment the real export gives the title, minus the
-      // .claude-handoff-ignore patterns, which load after this point.
-      let title = rewriteString(fullSessionTitle(meta) ?? '(untitled)');
-      if (!options.noRedact) {
-        title = redactText(title, [...envPatterns, ...identityPatterns]).text;
-      }
-      title = truncateTitle(title);
-      const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
-      console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
+      const { title, detail } = await describe(f);
+      console.log(`  ${path.basename(f)} — ${title} (${detail})`);
     }
     if (envNote) console.log(`\n${envNote}`);
     if (nothingChosen) {
       console.log('\nNothing written. Choose what to export:');
-      console.log('  claude-handoff export <words from the title>');
+      console.log('  claude-handoff export "<words from the title>"');
       console.log('  claude-handoff export -n 1      # the most recent session');
       console.log('  claude-handoff export --all');
     } else {
