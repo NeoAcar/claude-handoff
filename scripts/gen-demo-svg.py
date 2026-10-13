@@ -65,18 +65,19 @@ DEMOS = {
         ],
     },
     "archive": {
-        "height": 304,
+        "height": 412,
         "label": "claude-handoff demo: exporting a session to a single file and importing it "
         "elsewhere, with no shared repository.",
         "scenes": [
-            ("① Sender — no shared repo", "alice", 8.6, [
-                ("cmd", 0, "claude-handoff export -n 1 -o", 0.8, 2.4),
-                ("out", 1, KNOWN, 2.9, "n"),
-                ("out", 2, EXPORTED, 3.4, "o"),
-                ("out", 3, "Exported 1 session(s)", 3.7, "o"),
-                ("out", 4, REDACTED, 4.0, "w"),
-                ("out", 5, "Wrote /home/alice/myproject/fix-login-bug.handoff (148.3 KB)", 4.5, "o"),
-                ("out", 7, "→ one checksummed file: send it any way you like", 5.6, "n"),
+            ("① Sender — no shared repo", "alice", 10.4, [
+                ("cmd", 0, "claude-handoff export -o", 0.8, 2.2),
+                *picker(2.7),
+                ("out", 6, KNOWN, 4.8, "n"),
+                ("out", 7, EXPORTED, 5.3, "o"),
+                ("out", 8, "Exported 1 session(s)", 5.6, "o"),
+                ("out", 9, REDACTED, 5.9, "w"),
+                ("out", 10, "Wrote /home/alice/myproject/fix-login-bug.handoff (148.3 KB)", 6.4, "o"),
+                ("out", 12, "→ one checksummed file: send it any way you like", 7.5, "n"),
             ]),
             ("② Receiver — import &amp; resume", "neo", 9.6, [
                 ("cmd", 0, "claude-handoff import fix-login-bug.handoff", 0.7, 2.5),

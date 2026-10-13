@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 304" width="900" height="304" role="img" aria-label="claude-handoff demo: exporting a session to a single file and importing it elsewhere, with no shared repository.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 412" width="900" height="412" role="img" aria-label="claude-handoff demo: exporting a session to a single file and importing it elsewhere, with no shared repository.">
 <style>
 text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; }
 .o { fill: #c9d1d9; } .d { fill: #8b949e; } .w { fill: #e3b341; } .c { fill: #f0f6fc; }
@@ -7,37 +7,42 @@ text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation M
 .tab { fill: #c9d1d9; font-size: 13px; font-weight: 600; } .cur { fill: #c9d1d9; }
 </style>
 <defs>
-<clipPath id="c0"><rect x="172.8" y="76" width="0.0" height="22"><animate attributeName="width" dur="18.2s" repeatCount="indefinite" values="0;0;229.1;229.1" keyTimes="0.0000;0.0440;0.1319;1.0000"/></rect></clipPath>
-<clipPath id="c1"><rect x="157.1" y="76" width="0.0" height="22"><animate attributeName="width" dur="18.2s" repeatCount="indefinite" values="0;0;338.7;338.7" keyTimes="0.0000;0.5110;0.6099;1.0000"/></rect></clipPath>
-<clipPath id="c2"><rect x="157.1" y="196" width="0.0" height="22"><animate attributeName="width" dur="18.2s" repeatCount="indefinite" values="0;0;409.2;409.2" keyTimes="0.0000;0.7363;0.8352;1.0000"/></rect></clipPath>
+<clipPath id="c0"><rect x="172.8" y="76" width="0.0" height="22"><animate attributeName="width" dur="20.0s" repeatCount="indefinite" values="0;0;189.9;189.9" keyTimes="0.0000;0.0400;0.1100;1.0000"/></rect></clipPath>
+<clipPath id="c1"><rect x="157.1" y="76" width="0.0" height="22"><animate attributeName="width" dur="20.0s" repeatCount="indefinite" values="0;0;338.7;338.7" keyTimes="0.0000;0.5550;0.6450;1.0000"/></rect></clipPath>
+<clipPath id="c2"><rect x="157.1" y="196" width="0.0" height="22"><animate attributeName="width" dur="20.0s" repeatCount="indefinite" values="0;0;409.2;409.2" keyTimes="0.0000;0.7600;0.8500;1.0000"/></rect></clipPath>
 </defs>
-<rect width="900" height="304" rx="10" fill="#0d1117"/>
+<rect width="900" height="412" rx="10" fill="#0d1117"/>
 <rect width="900" height="42" rx="10" fill="#161b22"/><rect y="32" width="900" height="10" fill="#161b22"/>
-<rect x="0.5" y="0.5" width="899" height="303" rx="10" fill="none" stroke="#30363d"/>
+<rect x="0.5" y="0.5" width="899" height="411" rx="10" fill="none" stroke="#30363d"/>
 <circle cx="22" cy="21" r="6" fill="#ff5f56"/><circle cx="42" cy="21" r="6" fill="#ffbd2e"/><circle cx="62" cy="21" r="6" fill="#27c93f"/>
-<g opacity="1"><animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="1;0" keyTimes="0.0000;0.4725"/>
+<g opacity="1"><animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="1;0" keyTimes="0.0000;0.5200"/>
 <text x="450.0" y="27" class="tab" text-anchor="middle">① Sender — no shared repo</text>
-<text x="24" y="92" class="p alice" opacity="0" xml:space="preserve">alice:~/myproject$ <animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.0247"/></text>
-<text x="172.8" y="92" class="c" clip-path="url(#c0)" xml:space="preserve">claude-handoff export -n 1 -o</text>
-<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="18.2s" repeatCount="indefinite" values="172.8;172.8;401.8;401.8" keyTimes="0.0000;0.0440;0.1319;1.0000"/><animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.0247;0.1566"/></rect>
-<text x="24" y="116" class="n" opacity="0" xml:space="preserve">Known secret values to scrub: 2 (DB_PASSWORD, STRIPE_SECRET_KEY) from .env, the environment<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1593"/></text>
-<text x="24" y="140" class="o" opacity="0" xml:space="preserve">  Exported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f/ — Fix login bug (212 records + 2 sidecar(s))<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1868"/></text>
-<text x="24" y="164" class="o" opacity="0" xml:space="preserve">Exported 1 session(s)<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2033"/></text>
-<text x="24" y="188" class="w" opacity="0" xml:space="preserve">Redacted: 5 unique secret(s), 8 marker(s) written across fields<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2198"/></text>
-<text x="24" y="212" class="o" opacity="0" xml:space="preserve">Wrote /home/alice/myproject/fix-login-bug.handoff (148.3 KB)<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2473"/></text>
-<text x="24" y="260" class="n" opacity="0" xml:space="preserve">→ one checksummed file: send it any way you like<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.3077"/></text>
+<text x="24" y="92" class="p alice" opacity="0" xml:space="preserve">alice:~/myproject$ <animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.0225"/></text>
+<text x="172.8" y="92" class="c" clip-path="url(#c0)" xml:space="preserve">claude-handoff export -o</text>
+<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="20.0s" repeatCount="indefinite" values="172.8;172.8;362.7;362.7" keyTimes="0.0000;0.0400;0.1100;1.0000"/><animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.0225;0.1325"/></rect>
+<text x="24" y="116" class="o" opacity="0" xml:space="preserve">Pick a session to export:<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1350"/></text>
+<text x="24" y="140" class="sel" opacity="0" xml:space="preserve">❯ Fix login bug  (212 records + 2 sidecar(s), 5m ago)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1350"/></text>
+<text x="24" y="164" class="o" opacity="0" xml:space="preserve">  Refactor billing module  (88 records, 2d ago)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1350"/></text>
+<text x="24" y="188" class="o" opacity="0" xml:space="preserve">  Update CI config  (41 records, 6d ago)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1350"/></text>
+<text x="24" y="212" class="d" opacity="0" xml:space="preserve">↑/↓ move · Enter export · a all · q cancel<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.1350"/></text>
+<text x="24" y="236" class="n" opacity="0" xml:space="preserve">Known secret values to scrub: 2 (DB_PASSWORD, STRIPE_SECRET_KEY) from .env, the environment<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2400"/></text>
+<text x="24" y="260" class="o" opacity="0" xml:space="preserve">  Exported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f/ — Fix login bug (212 records + 2 sidecar(s))<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2650"/></text>
+<text x="24" y="284" class="o" opacity="0" xml:space="preserve">Exported 1 session(s)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2800"/></text>
+<text x="24" y="308" class="w" opacity="0" xml:space="preserve">Redacted: 5 unique secret(s), 8 marker(s) written across fields<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.2950"/></text>
+<text x="24" y="332" class="o" opacity="0" xml:space="preserve">Wrote /home/alice/myproject/fix-login-bug.handoff (148.3 KB)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.3200"/></text>
+<text x="24" y="380" class="n" opacity="0" xml:space="preserve">→ one checksummed file: send it any way you like<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.3750"/></text>
 </g>
-<g opacity="0"><animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.4725"/>
+<g opacity="0"><animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.5200"/>
 <text x="450.0" y="27" class="tab" text-anchor="middle">② Receiver — import &amp; resume</text>
-<text x="24" y="92" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.4918"/></text>
+<text x="24" y="92" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.5375"/></text>
 <text x="157.1" y="92" class="c" clip-path="url(#c1)" xml:space="preserve">claude-handoff import fix-login-bug.handoff</text>
-<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="18.2s" repeatCount="indefinite" values="157.1;157.1;495.8;495.8" keyTimes="0.0000;0.5110;0.6099;1.0000"/><animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.4918;0.6346"/></rect>
-<text x="24" y="116" class="n" opacity="0" xml:space="preserve">Archive verified: 6 file(s), written by claude-handoff 0.3.0<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6374"/></text>
-<text x="24" y="140" class="o" opacity="0" xml:space="preserve">  Imported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f.jsonl — Fix login bug (3 artifact(s) + 2 sidecar(s))<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6648"/></text>
-<text x="24" y="164" class="o" opacity="0" xml:space="preserve">Imported 1 session(s)<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6813"/></text>
-<text x="24" y="212" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.7170"/></text>
+<rect y="79" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="20.0s" repeatCount="indefinite" values="157.1;157.1;495.8;495.8" keyTimes="0.0000;0.5550;0.6450;1.0000"/><animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.5375;0.6675"/></rect>
+<text x="24" y="116" class="n" opacity="0" xml:space="preserve">Archive verified: 6 file(s), written by claude-handoff 0.3.0<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6700"/></text>
+<text x="24" y="140" class="o" opacity="0" xml:space="preserve">  Imported: 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f.jsonl — Fix login bug (3 artifact(s) + 2 sidecar(s))<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.6950"/></text>
+<text x="24" y="164" class="o" opacity="0" xml:space="preserve">Imported 1 session(s)<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.7100"/></text>
+<text x="24" y="212" class="p neo" opacity="0" xml:space="preserve">neo:~/myproject$ <animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.7425"/></text>
 <text x="157.1" y="212" class="c" clip-path="url(#c2)" xml:space="preserve">claude --resume 084c4bf8-2d1e-4c7a-9b3f-5e6a7c8d9e0f</text>
-<rect y="199" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="18.2s" repeatCount="indefinite" values="157.1;157.1;566.3;566.3" keyTimes="0.0000;0.7363;0.8352;1.0000"/><animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.7170;0.8599"/></rect>
-<text x="24" y="260" class="ok" opacity="0" xml:space="preserve">✓ “Fix login bug” resumes with its full history — no repo involved<animate attributeName="opacity" dur="18.2s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.8736"/></text>
+<rect y="199" width="8" height="16" class="cur" opacity="0"><animate attributeName="x" dur="20.0s" repeatCount="indefinite" values="157.1;157.1;566.3;566.3" keyTimes="0.0000;0.7600;0.8500;1.0000"/><animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1;0" keyTimes="0.0000;0.7425;0.8725"/></rect>
+<text x="24" y="260" class="ok" opacity="0" xml:space="preserve">✓ “Fix login bug” resumes with its full history — no repo involved<animate attributeName="opacity" dur="20.0s" repeatCount="indefinite" calcMode="discrete" values="0;1" keyTimes="0.0000;0.8850"/></text>
 </g>
 </svg>
