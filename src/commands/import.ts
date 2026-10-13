@@ -41,6 +41,8 @@ export interface ImportOptions {
   session?: string;
   all: boolean;
   overwrite: boolean;
+  /** Read bundles from here instead of `<project>/.claude-shared`. Used by archive import. */
+  sharedDir?: string;
 }
 
 export async function importCommand(projectRoot: string, options: ImportOptions): Promise<void> {
@@ -49,7 +51,7 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   // the canonicalized project root. This covers Neo's first import on this
   // machine when the slug dir doesn't exist yet.
   const slugDir = await getOrComputeStoreDir(projectRoot);
-  const sharedDir = path.join(projectRoot, '.claude-shared');
+  const sharedDir = options.sharedDir ?? path.join(projectRoot, '.claude-shared');
   const sessionsDir = path.join(sharedDir, 'sessions');
 
   // Read the manifest; readManifest auto-migrates v0.1.0 → v0.2.0 so we
@@ -67,8 +69,12 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
   }
 
   if (entries.length === 0) {
-    console.log('No shared sessions found in .claude-shared/sessions/');
-    console.log('Has someone run `claude-handoff export` and committed the result?');
+    if (options.sharedDir !== undefined) {
+      console.log('The archive contains no sessions.');
+    } else {
+      console.log('No shared sessions found in .claude-shared/sessions/');
+      console.log('Has someone run `claude-handoff export` and committed the result?');
+    }
     return;
   }
 

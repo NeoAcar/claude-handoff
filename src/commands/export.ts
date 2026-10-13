@@ -22,7 +22,6 @@ import os from 'node:os';
 import { localToPortable, deepRewrite } from '../core/paths.js';
 import {
   collectSessionArtifacts,
-  findCanonicalGitRoot,
   findExistingMemoryDir,
   findProjectStoreDir,
   getClaudeProjectsDir,
@@ -81,6 +80,11 @@ export interface ExportOptions {
    * with `noRedact`.
    */
   envScan?: boolean;
+  /**
+   * Write the bundle tree here instead of `<project>/.claude-shared`.
+   * Used by archive export, which stages the tree and packs it.
+   */
+  sharedDir?: string;
 }
 
 interface ExportResult {
@@ -92,7 +96,8 @@ interface ExportResult {
   totalSkipped: number;
 }
 
-export async function exportCommand(projectRoot: string, options: ExportOptions): Promise<void> {
+/** Runs the export and resolves to the number of sessions written. */
+export async function exportCommand(projectRoot: string, options: ExportOptions): Promise<number> {
   // Safety check for --no-redact
   if (options.noRedact && !options.iKnowWhatImDoing) {
     throw new Error(
@@ -103,7 +108,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
 
   const localHome = os.homedir();
   const storeDir = await findProjectStoreDir(projectRoot);
-  const sharedDir = path.join(projectRoot, '.claude-shared');
+  const sharedDir = options.sharedDir ?? path.join(projectRoot, '.claude-shared');
+  const staged = options.sharedDir !== undefined;
   const sessionsDir = path.join(sharedDir, 'sessions');
   const localDir = path.join(projectRoot, '.claude-handoff');
 
@@ -114,7 +120,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     console.log(
       `Looked in: ${storeDir ?? path.join(getClaudeProjectsDir(), '<no matching project store>')}`,
     );
-    return;
+    return 0;
   }
 
   // One metadata pass over every local session, before filtering.
@@ -166,7 +172,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     sessionFiles = filtered;
     if (sessionFiles.length === 0) {
       console.log(`No sessions modified since ${options.since}.`);
-      return;
+      return 0;
     }
   }
 
@@ -206,7 +212,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     }
     if (envNote) console.log(`\n${envNote}`);
     console.log('\nRun without --dry-run to export.');
-    return;
+    return 0;
   }
 
   // Ensure output directories exist
@@ -457,7 +463,6 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       title,
       firstTimestamp: meta.firstTimestamp,
       lastTimestamp: meta.lastTimestamp,
-      sourceProjectRoot: projectRoot,
       strippedProgress,
     };
     const metadataPath = path.join(bundleDir, 'metadata.json');
@@ -468,7 +473,6 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sessionId,
       author,
       exportedAt: metadataPayload.exportedAt,
-      sourceProjectRoot: projectRoot,
       title,
       firstTimestamp: meta.firstTimestamp,
       lastTimestamp: meta.lastTimestamp,
@@ -550,7 +554,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   }
 
   // Summary
-  console.log(`\nExported ${result.exported.length} session(s) to .claude-shared/`);
+  console.log(
+    `\nExported ${result.exported.length} session(s)` + (staged ? '' : ' to .claude-shared/'),
+  );
   if (result.totalRedactionHits > 0) {
     const uniqueCount = countUniqueHits(result.allHits);
     const byPattern = groupByPattern(result.allHits);
@@ -570,7 +576,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
         `(recovered ${result.totalRecovered}, skipped ${result.totalSkipped})`,
     );
   }
-  console.log('Before committing, run: git diff .claude-shared/');
+  if (!staged) console.log('Before committing, run: git diff .claude-shared/');
+  return result.exported.length;
 }
 
 // --- Artifact transform helpers (buffered — for small text files) ---
@@ -625,11 +632,9 @@ async function exportMemory(args: {
   redact: boolean;
   customPatterns: RedactionPattern[];
   onHits: (hits: RedactionHit[]) => void;
-}): Promise<{ exportedAt: string; sourceGitRoot?: string; files: MemoryArtifact[] } | null> {
+}): Promise<{ exportedAt: string; files: MemoryArtifact[] } | null> {
   const memSource = await findExistingMemoryDir(args.projectRoot);
   if (!memSource) return null;
-
-  const sourceGitRoot = await findCanonicalGitRoot(args.projectRoot);
 
   const entries = await listMemoryFiles(args.projectRoot);
   if (entries.length === 0) return null;
@@ -659,7 +664,6 @@ async function exportMemory(args: {
 
   return {
     exportedAt: new Date().toISOString(),
-    sourceGitRoot,
     files,
   };
 }

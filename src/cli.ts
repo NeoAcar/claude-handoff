@@ -12,6 +12,7 @@ import { importCommand } from './commands/import.js';
 import { statusCommand } from './commands/status.js';
 import { listCommand } from './commands/list.js';
 import { doctorCommand } from './commands/doctor.js';
+import { exportArchiveCommand, importArchiveCommand } from './commands/archive.js';
 import { TOOL_VERSION } from './core/version.js';
 
 const program = new Command();
@@ -58,9 +59,13 @@ program
     'Export even when the local session looks behind the shared bundle (bypasses fork detection)',
     false,
   )
+  .option(
+    '--archive <file>',
+    'Write one archive file to send directly, instead of .claude-shared/ in the repo',
+  )
   .action(async (opts) => {
-    await run(() =>
-      exportCommand(getProjectRoot(), {
+    await run(async () => {
+      const options = {
         dryRun: opts.dryRun,
         noRedact: !opts.redact,
         iKnowWhatImDoing: opts.iKnowWhatImDoing,
@@ -73,8 +78,10 @@ program
         includeMemory: opts.memory,
         force: opts.force,
         envScan: opts.envScan,
-      }),
-    );
+      };
+      if (opts.archive) await exportArchiveCommand(getProjectRoot(), opts.archive, options);
+      else await exportCommand(getProjectRoot(), options);
+    });
   });
 
 program
@@ -84,15 +91,18 @@ program
   .option('--all', 'Import everything (default)', true)
   .option('--dry-run', 'Preview path rewrites and destination', false)
   .option('--overwrite', 'Replace existing local sessions with same ID', false)
+  .option('--archive <file>', 'Import from an archive file written by `export --archive`')
   .action(async (opts) => {
-    await run(() =>
-      importCommand(getProjectRoot(), {
+    await run(async () => {
+      const options = {
         dryRun: opts.dryRun,
         session: opts.session,
         all: opts.all,
         overwrite: opts.overwrite,
-      }),
-    );
+      };
+      if (opts.archive) await importArchiveCommand(getProjectRoot(), opts.archive, options);
+      else await importCommand(getProjectRoot(), options);
+    });
   });
 
 program

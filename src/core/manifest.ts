@@ -48,7 +48,11 @@ export interface ManifestEntry {
   sessionId: string;
   author: string;
   exportedAt: string;
-  /** Canonicalized project root this session was captured in, when known. */
+  /**
+   * Absolute project root on the exporting machine. Written by 0.2.x and
+   * earlier only: nothing reads it, and it put the sender's home directory
+   * name into an otherwise path-free bundle.
+   */
   sourceProjectRoot?: string;
   /** Snapshot of the session title (custom, AI-generated, or last prompt) at export time. */
   title?: string;
@@ -108,7 +112,7 @@ export interface MemoryArtifact {
 
 export interface MemoryBundle {
   exportedAt: string;
-  /** Canonical git root this memory set was captured from, when known. */
+  /** Absolute git root on the exporting machine. Written by 0.2.x and earlier only. */
   sourceGitRoot?: string;
   files: MemoryArtifact[];
 }
