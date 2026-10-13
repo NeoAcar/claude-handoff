@@ -10,6 +10,7 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { extractAccountIdentity } from './sanitizeRecord.js';
 import type { AccountIdentity } from './sanitizeRecord.js';
+import { titleFromRecord } from './title.js';
 
 // --- Types ---
 
@@ -29,6 +30,8 @@ export interface SessionMeta {
   customTitle?: string;
   /** Auto-generated title (`ai-title` record), written by newer Claude Code versions. */
   aiTitle?: string;
+  /** First thing the user actually typed, shortened (see `title.ts`). */
+  firstPrompt?: string;
   lastPrompt?: string;
   firstTimestamp?: string;
   lastTimestamp?: string;
@@ -40,12 +43,12 @@ export interface SessionMeta {
 
 /**
  * Human-facing title for a session: the user's own title wins, then the
- * auto-generated one, then the last prompt.
+ * auto-generated one, then the first thing they asked, then the last prompt.
  */
 export function sessionTitle(
-  meta: Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'lastPrompt'>,
+  meta: Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'firstPrompt' | 'lastPrompt'>,
 ): string | undefined {
-  return meta.customTitle ?? meta.aiTitle ?? meta.lastPrompt;
+  return meta.customTitle ?? meta.aiTitle ?? meta.firstPrompt ?? meta.lastPrompt;
 }
 
 /**
@@ -175,6 +178,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
   let sessionId: string | undefined;
   let customTitle: string | undefined;
   let aiTitle: string | undefined;
+  let firstPrompt: string | undefined;
   let lastPrompt: string | undefined;
   const emails = new Set<string>();
   const orgUuids = new Set<string>();
@@ -202,6 +206,10 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
       aiTitle = (record as Record<string, unknown>).aiTitle as string | undefined;
     }
 
+    if (!firstPrompt && record.type === 'user') {
+      firstPrompt = titleFromRecord(record);
+    }
+
     if (record.type === 'last-prompt') {
       lastPrompt = (record as Record<string, unknown>).lastPrompt as string | undefined;
     }
@@ -222,6 +230,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
     filePath,
     customTitle,
     aiTitle,
+    firstPrompt,
     lastPrompt,
     firstTimestamp,
     lastTimestamp,
