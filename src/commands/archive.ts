@@ -56,7 +56,7 @@ export async function exportArchiveCommand(
   if (!inProject.startsWith('..') && !path.isAbsolute(inProject)) {
     console.log('Note: the archive is inside the project directory. Keep it out of git.');
   }
-  console.log(`They import it with: claude-handoff import --archive ${path.basename(target)}`);
+  console.log(`They import it with: claude-handoff import ${path.basename(target)}`);
 }
 
 export async function importArchiveCommand(

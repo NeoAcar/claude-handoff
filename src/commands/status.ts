@@ -12,7 +12,15 @@ import {
 import { listSessionFiles, extractSessionMeta, sessionTitle } from '../core/session.js';
 import { readManifest } from '../core/manifest.js';
 
-export async function statusCommand(projectRoot: string): Promise<void> {
+export interface StatusOptions {
+  /** Also show who exported each shared session, when, and what was redacted. */
+  verbose?: boolean;
+}
+
+export async function statusCommand(
+  projectRoot: string,
+  options: StatusOptions = {},
+): Promise<void> {
   // Resolve the Claude store dir for display; fall back to the computed
   // target when nothing is found so the "looked in X" message is still
   // useful.
@@ -72,6 +80,22 @@ export async function statusCommand(projectRoot: string): Promise<void> {
       const sideNote = sidecarCount > 0 ? `, ${sidecarCount} sidecar(s)` : '';
       const sizeNote = transcript?.bytes ? `, ${humanSize(transcript.bytes)}` : '';
       console.log(`  ${entry.sessionId} — ${title} (${recordNote}${sideNote}${sizeNote})`);
+      if (options.verbose) {
+        console.log(`      exported by ${entry.author} at ${entry.exportedAt}`);
+        if (entry.totalRedactionHits > 0) {
+          console.log(`      redaction markers: ${entry.totalRedactionHits}`);
+        }
+        if (sidecarCount > 0) {
+          const kinds = entry.artifacts.filter((a) => a.kind !== 'transcript').map((a) => a.kind);
+          console.log(`      sidecars: ${[...new Set(kinds)].join(', ')}`);
+        }
+        if (entry.firstTimestamp && entry.lastTimestamp) {
+          console.log(`      timespan: ${entry.firstTimestamp} → ${entry.lastTimestamp}`);
+        }
+        for (const previous of entry.previousExports ?? []) {
+          console.log(`      earlier round: ${previous.author} at ${previous.exportedAt}`);
+        }
+      }
     }
     if (manifest.memory && manifest.memory.files.length > 0) {
       console.log(`  + ${manifest.memory.files.length} memory file(s)`);

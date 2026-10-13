@@ -144,7 +144,7 @@ export async function runDoctor(
     add(
       'warn',
       '.gitignore',
-      '.claude-handoff/ is not ignored — run `claude-handoff init` before exporting',
+      '.claude-handoff/ is not ignored yet — `export` adds it on first use (in a git repository)',
     );
   }
 

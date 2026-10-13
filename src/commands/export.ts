@@ -41,6 +41,7 @@ import type { SessionMeta, SessionRecord } from '../core/session.js';
 import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import { collectEnvSecrets, envRedactionPatterns } from '../core/envSecrets.js';
+import { ensureLocalDirIgnored, ensureSharedReadme } from './init.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
@@ -87,6 +88,14 @@ export interface ExportOptions {
    * Used by archive export, which stages the tree and packs it.
    */
   sharedDir?: string;
+  /** Export every session of the project. Only meaningful with `requireSelection`. */
+  all?: boolean;
+  /**
+   * CLI behaviour: with nothing chosen (`session`, `last`, `since`,
+   * `all`), list the sessions and stop instead of exporting them all.
+   * Off for programmatic callers, where no filter means everything.
+   */
+  requireSelection?: boolean;
 }
 
 interface ExportResult {
@@ -209,9 +218,22 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     }
   }
 
-  // Dry-run mode
-  if (options.dryRun) {
-    console.log(`Would export ${sessionFiles.length} session(s) as "${author}":\n`);
+  // Nothing chosen on the command line: show what there is and stop. A
+  // bare `export` used to write every session of the project.
+  const nothingChosen =
+    options.requireSelection === true &&
+    !options.all &&
+    options.session === undefined &&
+    options.last === undefined &&
+    options.since === undefined;
+
+  // Preview mode
+  if (options.dryRun || nothingChosen) {
+    console.log(
+      nothingChosen
+        ? `${sessionFiles.length} session(s) in this project, newest first:\n`
+        : `Would export ${sessionFiles.length} session(s) as "${author}":\n`,
+    );
     for (const f of sessionFiles) {
       const meta = metaByFile.get(f)!;
       const sidecars = await collectSessionArtifacts(f);
@@ -226,13 +248,24 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
     }
     if (envNote) console.log(`\n${envNote}`);
-    console.log('\nRun without --dry-run to export.');
+    if (nothingChosen) {
+      console.log('\nNothing written. Choose what to export:');
+      console.log('  claude-handoff export <words from the title>');
+      console.log('  claude-handoff export -n 1      # the most recent session');
+      console.log('  claude-handoff export --all');
+    } else {
+      console.log('\nRun without --dry-run to export.');
+    }
     return 0;
   }
 
   // Ensure output directories exist
   await mkdir(sessionsDir, { recursive: true });
-  await mkdir(localDir, { recursive: true });
+  // First-run setup, so there is no separate init step: keep the local
+  // redaction log out of git, and explain the shared folder to whoever
+  // finds it in the repo.
+  for (const change of await ensureLocalDirIgnored(projectRoot)) console.log(change);
+  if (!staged) await ensureSharedReadme(sharedDir);
 
   // Load user-supplied redaction patterns from .claude-handoff-ignore, if any.
   // The file lives in the project root (not in .claude-handoff/) so a team can

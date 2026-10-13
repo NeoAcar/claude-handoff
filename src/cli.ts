@@ -4,13 +4,12 @@
  * claude-handoff CLI entry point.
  */
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { resolve } from 'node:path';
 import { initCommand } from './commands/init.js';
 import { exportCommand } from './commands/export.js';
 import { importCommand } from './commands/import.js';
 import { statusCommand } from './commands/status.js';
-import { listCommand } from './commands/list.js';
 import { doctorCommand } from './commands/doctor.js';
 import { exportArchiveCommand, importArchiveCommand } from './commands/archive.js';
 import { skillInstallCommand, skillPrintCommand } from './commands/skill.js';
@@ -24,56 +23,51 @@ program
   .version(TOOL_VERSION);
 
 program
-  .command('init')
-  .description('One-time setup: create .claude-shared/, update .gitignore')
-  .action(async () => {
-    await run(() => initCommand(getProjectRoot()));
-  });
-
-program
-  .command('export')
-  .description("Export local Claude Code sessions to .claude-shared/ (Alice's command)")
-  .option('--session <id|title>', 'Export sessions matching an ID prefix or title text')
-  .option('--last <n>', 'Export the last N sessions', parseInt)
-  .option('--since <date>', 'Export sessions modified since date')
-  .option('--author <name>', 'Tag exported sessions with author name')
-  .option('--dry-run', 'Show what would happen, write nothing', false)
-  .option('--no-redact', 'Skip secret redaction')
-  .option('--i-know-what-im-doing', 'Required with --no-redact', false)
-  .option(
-    '--no-env-scan',
-    "Don't scrub values found in the project's .env files and secret-named environment variables",
+  .command('export [session]')
+  .description(
+    'Export sessions for a handoff. [session] is words from a title or an ID prefix; ' +
+      'with nothing chosen, lists the sessions and writes nothing.',
   )
-  .option('--strip-progress', 'Drop streaming progress records (smaller files)', false)
-  .option(
-    '--keep-signatures',
-    'Keep thinking.signature fields (default: strip to avoid API 400s after cross-machine resume)',
-    false,
+  .option('-n, --last <n>', 'Export the N most recent sessions', parseInt)
+  .option('--all', 'Export every session of this project', false)
+  .option('-o, --archive <file>', 'Write one file to send directly, instead of .claude-shared/')
+  .option('--memory', "Also export the project's auto-memory files", false)
+  .option('--dry-run', 'Show what would be exported, write nothing', false)
+  .addOption(new Option('--session <id|title>').hideHelp())
+  .addOption(new Option('--since <date>').hideHelp())
+  .addOption(new Option('--author <name>').hideHelp())
+  .addOption(new Option('--no-redact').hideHelp())
+  .addOption(new Option('--i-know-what-im-doing').default(false).hideHelp())
+  .addOption(new Option('--no-env-scan').hideHelp())
+  .addOption(new Option('--strip-progress').default(false).hideHelp())
+  .addOption(new Option('--keep-signatures').default(false).hideHelp())
+  .addOption(new Option('--force').default(false).hideHelp())
+  .addHelpText(
+    'after',
+    [
+      '',
+      'Less common options (details in the README):',
+      '  --since <date>       only sessions started on or after an ISO date',
+      '  --author <name>      name recorded in the bundle (default: git user.name)',
+      '  --strip-progress     drop streaming progress records to shrink the bundle',
+      '  --keep-signatures    keep signed thinking blocks (receiver must share your API key)',
+      '  --force              export even if the shared bundle looks newer than your copy',
+      '  --no-env-scan        do not scrub values found in .env files and the environment',
+      '  --no-redact --i-know-what-im-doing   turn redaction off entirely',
+    ].join('\n'),
   )
-  .option(
-    '--memory',
-    "Also export the project's auto-memory files (~/.claude/projects/<key>/memory/ except MEMORY.md)",
-    false,
-  )
-  .option(
-    '--force',
-    'Export even when the local session looks behind the shared bundle (bypasses fork detection)',
-    false,
-  )
-  .option(
-    '--archive <file>',
-    'Write one archive file to send directly, instead of .claude-shared/ in the repo',
-  )
-  .action(async (opts) => {
+  .action(async (session: string | undefined, opts) => {
     await run(async () => {
       const options = {
         dryRun: opts.dryRun,
         noRedact: !opts.redact,
         iKnowWhatImDoing: opts.iKnowWhatImDoing,
         author: opts.author,
-        session: opts.session,
+        session: session ?? opts.session,
         last: opts.last,
         since: opts.since,
+        all: opts.all,
+        requireSelection: true,
         stripProgress: opts.stripProgress,
         keepSignatures: opts.keepSignatures,
         includeMemory: opts.memory,
@@ -86,39 +80,46 @@ program
   });
 
 program
-  .command('import')
-  .description("Import shared sessions from .claude-shared/ (Neo's command)")
-  .option('--session <id|title>', 'Import sessions matching an ID prefix or title text')
-  .option('--all', 'Import everything (default)', true)
-  .option('--dry-run', 'Preview path rewrites and destination', false)
-  .option('--overwrite', 'Replace existing local sessions with same ID', false)
-  .option('--archive <file>', 'Import from an archive file written by `export --archive`')
-  .action(async (opts) => {
+  .command('import [file]')
+  .description(
+    'Import shared sessions so `claude --resume` finds them. ' +
+      'With [file], reads an archive written by `export -o`; otherwise reads .claude-shared/.',
+  )
+  .option('--overwrite', 'Replace local sessions that have work the bundle lacks', false)
+  .option('--dry-run', 'Show what would be imported, write nothing', false)
+  .addOption(new Option('--session <id|title>').hideHelp())
+  .addOption(new Option('--archive <file>').hideHelp())
+  .action(async (file: string | undefined, opts) => {
     await run(async () => {
       const options = {
         dryRun: opts.dryRun,
         session: opts.session,
-        all: opts.all,
+        all: true,
         overwrite: opts.overwrite,
       };
-      if (opts.archive) await importArchiveCommand(getProjectRoot(), opts.archive, options);
+      const archive = file ?? opts.archive;
+      if (archive) await importArchiveCommand(getProjectRoot(), archive, options);
       else await importCommand(getProjectRoot(), options);
     });
   });
 
 program
   .command('status')
-  .description('Show local sessions, shared sessions, and diff')
-  .action(async () => {
-    await run(() => statusCommand(getProjectRoot()));
+  .description('Show local sessions, shared sessions, and what is not exported yet')
+  .option(
+    '-v, --verbose',
+    'Also show who exported each shared session, when, and redactions',
+    false,
+  )
+  .action(async (opts) => {
+    await run(() => statusCommand(getProjectRoot(), { verbose: opts.verbose }));
   });
 
 program
-  .command('list')
-  .description('List sessions in .claude-shared/')
-  .option('-v, --verbose', 'Show author, export time, and redaction markers per session', false)
-  .action(async (opts) => {
-    await run(() => listCommand(getProjectRoot(), { verbose: opts.verbose }));
+  .command('init', { hidden: true })
+  .description('Optional: set up .claude-shared/ and .gitignore ahead of the first export')
+  .action(async () => {
+    await run(() => initCommand(getProjectRoot()));
   });
 
 // Default action when no subcommand is given: run `status` and hint at next steps.
@@ -126,7 +127,7 @@ program.action(async () => {
   await run(async () => {
     await statusCommand(getProjectRoot());
     console.log(
-      '\nNext: `claude-handoff export` to share, or `claude-handoff --help` for all commands.',
+      '\nNext: `claude-handoff export` to pick a session to share, or `claude-handoff --help`.',
     );
   });
 });
