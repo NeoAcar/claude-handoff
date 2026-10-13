@@ -180,18 +180,22 @@ export function deepRedact(
 }
 
 /**
- * Build a pattern that matches one exact string (no regex semantics),
- * ignoring case. Used for values learned from the session itself, e.g. the account email.
+ * Build a pattern that matches one exact string (no regex semantics).
+ * Case-insensitive unless asked otherwise — right for an email address,
+ * wrong for a password. Used for values learned from the session or the
+ * exporting machine rather than recognised by shape.
  */
 export function literalPattern(
   name: string,
   literal: string,
   replacement: string,
+  caseSensitive = false,
 ): RedactionPattern {
   return {
     name,
-    regex: new RegExp(literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
-    replacement,
+    regex: new RegExp(literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi'),
+    // `$` is special in String.replace replacements.
+    replacement: replacement.replace(/\$/g, '$$$$'),
   };
 }
 

@@ -37,6 +37,10 @@ program
   .option('--dry-run', 'Show what would happen, write nothing', false)
   .option('--no-redact', 'Skip secret redaction')
   .option('--i-know-what-im-doing', 'Required with --no-redact', false)
+  .option(
+    '--no-env-scan',
+    "Don't scrub values found in the project's .env files and secret-named environment variables",
+  )
   .option('--strip-progress', 'Drop streaming progress records (smaller files)', false)
   .option(
     '--keep-signatures',
@@ -67,6 +71,7 @@ program
         keepSignatures: opts.keepSignatures,
         includeMemory: opts.memory,
         force: opts.force,
+        envScan: opts.envScan,
       }),
     );
   });

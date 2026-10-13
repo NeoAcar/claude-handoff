@@ -39,6 +39,7 @@ import {
 import type { SessionMeta, SessionRecord } from '../core/session.js';
 import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
+import { collectEnvSecrets, envRedactionPatterns } from '../core/envSecrets.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
 import { readManifest, writeManifest, createEmptyManifest } from '../core/manifest.js';
 import type { BundleArtifact, ManifestEntry, MemoryArtifact } from '../core/manifest.js';
@@ -74,6 +75,12 @@ export interface ExportOptions {
    * Rarely needed — primarily an escape hatch for truly broken states.
    */
   force?: boolean;
+  /**
+   * Scrub the values found in the project's `.env` files and in
+   * secret-named environment variables. On by default; has no effect
+   * with `noRedact`.
+   */
+  envScan?: boolean;
 }
 
 interface ExportResult {
@@ -170,6 +177,23 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
   // Get author name
   const author = options.author ?? (await getGitUserName()) ?? os.userInfo().username;
 
+  // Secret values this machine already knows: the project's .env files
+  // and secret-named environment variables. Matched literally, so they
+  // are caught whatever they look like.
+  let envPatterns: RedactionPattern[] = [];
+  let envNote = '';
+  if (!options.noRedact && options.envScan !== false) {
+    const collected = await collectEnvSecrets(projectRoot);
+    envPatterns = envRedactionPatterns(collected.secrets);
+    if (collected.secrets.length > 0) {
+      const keys = [...new Set(collected.secrets.map((s) => s.key))];
+      const shown =
+        keys.slice(0, 8).join(', ') + (keys.length > 8 ? `, +${keys.length - 8} more` : '');
+      const sources = [...collected.files, 'the environment'].join(', ');
+      envNote = `Known secret values to scrub: ${collected.secrets.length} (${shown}) from ${sources}`;
+    }
+  }
+
   // Dry-run mode
   if (options.dryRun) {
     console.log(`Would export ${sessionFiles.length} session(s) as "${author}":\n`);
@@ -180,6 +204,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       const sidecarNote = sidecars.length > 0 ? ` + ${sidecars.length} sidecar(s)` : '';
       console.log(`  ${path.basename(f)} — ${title} (${meta.recordCount} records${sidecarNote})`);
     }
+    if (envNote) console.log(`\n${envNote}`);
     console.log('\nRun without --dry-run to export.');
     return;
   }
@@ -197,6 +222,8 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       `Loaded ${customPatterns.length} custom redaction pattern(s) from .claude-handoff-ignore`,
     );
   }
+
+  if (envNote) console.log(envNote);
 
   // Read or create manifest. readManifest auto-migrates v1 → v2 on load
   // so older .claude-shared/ folders keep working.
@@ -288,9 +315,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     const sessionHits: RedactionHit[] = [];
     const artifacts: BundleArtifact[] = [];
 
-    // User patterns from .claude-handoff-ignore plus the account
-    // identity learned from the local sessions.
-    const sessionPatterns = [...customPatterns, ...identityPatterns];
+    // Known env values, user patterns from .claude-handoff-ignore, and
+    // the account identity learned from the local sessions.
+    const sessionPatterns = [...envPatterns, ...customPatterns, ...identityPatterns];
 
     // --- Main transcript ---
     let strippedProgress = 0;
@@ -483,7 +510,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sharedDir,
       rewriteString,
       redact: !options.noRedact,
-      customPatterns: [...customPatterns, ...identityPatterns],
+      customPatterns: [...envPatterns, ...customPatterns, ...identityPatterns],
       onHits: (hits) => result.allHits.push(...hits),
     });
     if (memoryBundle) {

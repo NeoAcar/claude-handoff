@@ -202,4 +202,39 @@ describe('modern record shapes round-trip', () => {
     expect(mainBundle).toContain(EMAIL);
     expect(mainBundle).toContain(ORG_UUID);
   });
+
+  it('scrubs values from the project .env wherever they appear', async () => {
+    const alice = await seedAlice();
+    process.env.HOME = alice.home;
+    // No recognisable shape, and not written as an assignment in the transcript.
+    const dbPassword = 'plum-Harbor-91-velvet';
+    await writeFile(
+      join(alice.project, '.env'),
+      `DB_PASSWORD=${dbPassword}\nNODE_ENV=development\n`,
+      'utf-8',
+    );
+    await writeFile(
+      join(alice.store, SESSION_ID, 'tool-results', 'psql.txt'),
+      `connecting as app with ${dbPassword} ... ok (development)\n`,
+      'utf-8',
+    );
+
+    const bundleDir = join(alice.project, '.claude-shared', 'sessions', SESSION_ID);
+    const toolResult = () => readFile(join(bundleDir, 'tool-results', 'psql.txt'), 'utf-8');
+
+    await exportCommand(alice.project, { dryRun: false, noRedact: false, iKnowWhatImDoing: false });
+    expect(await toolResult()).toBe(
+      'connecting as app with [REDACTED:env:DB_PASSWORD] ... ok (development)\n',
+    );
+
+    // Opting out leaves it for the shape-based patterns, which don't know it.
+    await rm(join(alice.project, '.claude-shared'), { recursive: true, force: true });
+    await exportCommand(alice.project, {
+      dryRun: false,
+      noRedact: false,
+      iKnowWhatImDoing: false,
+      envScan: false,
+    });
+    expect(await toolResult()).toContain(dbPassword);
+  });
 });
