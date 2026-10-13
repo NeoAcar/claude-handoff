@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -7,6 +7,7 @@ import {
   envRedactionPatterns,
   findEnvFiles,
   isEnvFileName,
+  isSecretName,
   parseEnvFile,
   selectSecrets,
   shannonEntropy,
@@ -26,6 +27,9 @@ describe('parseEnvFile', () => {
         'SPACED = padded',
         'EMPTY=',
         'not an assignment',
+        String.raw`ESCAPED="say \"hi\" \\ done" # it's a comment`,
+        `TRICKY='abc' # don't break`,
+        'UNCLOSED="abc def',
       ].join('\n'),
     );
     expect(entries).toEqual([
@@ -35,6 +39,9 @@ describe('parseEnvFile', () => {
       { key: 'SINGLE', value: 'single quoted' },
       { key: 'TRAILING', value: 'abc123' },
       { key: 'SPACED', value: 'padded' },
+      { key: 'ESCAPED', value: String.raw`say "hi" \ done` },
+      { key: 'TRICKY', value: 'abc' },
+      { key: 'UNCLOSED', value: '"abc def' },
     ]);
   });
 
@@ -60,7 +67,7 @@ describe('selectSecrets', () => {
     ).toEqual(['STRIPE_SECRET_KEY', 'DB_PASSWORD', 'SESSION_TOKEN']);
   });
 
-  it('skips short values, numbers, booleans and paths even under secret keys', () => {
+  it('skips short values, short numbers, booleans and paths even under secret keys', () => {
     expect(
       keys([
         { key: 'API_KEY', value: 'short' },
@@ -68,8 +75,25 @@ describe('selectSecrets', () => {
         { key: 'AUTH_ENABLED', value: 'false' },
         { key: 'PRIVATE_KEY_PATH', value: '/etc/ssl/private/server.key' },
         { key: 'KEY_FILE', value: './secrets/key.pem' },
+        { key: 'KEY_DIR', value: '~/keys/production' },
       ]),
     ).toEqual([]);
+  });
+
+  it('takes long numeric passwords and base64 secrets that start with a slash', () => {
+    expect(
+      keys([
+        { key: 'DB_PASSWORD', value: '123456789012' },
+        { key: 'AWS_SECRET_ACCESS_KEY', value: '/wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' },
+      ]),
+    ).toEqual(['AWS_SECRET_ACCESS_KEY', 'DB_PASSWORD']);
+  });
+
+  it('judges names by whole parts, not substrings', () => {
+    const secret = ['GITHUB_TOKEN', 'API_KEYS', 'stripe.secret', 'DATABASE_URL', 'db-password'];
+    expect(secret.map(isSecretName)).toEqual(secret.map(() => true));
+    const plain = ['AUTHOR', 'KEYBOARD_LAYOUT', 'PASSENGER_COUNT', 'TOKENIZER', 'NODE_ENV'];
+    expect(plain.map(isSecretName)).toEqual(plain.map(() => false));
   });
 
   it('takes long random values under innocuous keys, but not ordinary settings', () => {
@@ -156,17 +180,11 @@ describe('env file discovery', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('recognises real dotenv names and rejects templates', () => {
-    expect(['.env', '.env.local', '.env.production'].map(isEnvFileName)).toEqual([
-      true,
-      true,
-      true,
-    ]);
-    expect(
-      ['.env.example', '.env.sample', '.env.local.template', '.envrc', 'env', 'a.env'].map(
-        isEnvFileName,
-      ),
-    ).toEqual([false, false, false, false, false, false]);
+  it('recognises real env file names and rejects templates', () => {
+    const real = ['.env', '.env.local', '.env.production', '.envrc', 'secrets.env'];
+    expect(real.map(isEnvFileName)).toEqual(real.map(() => true));
+    const not = ['.env.example', '.env.sample', '.env.local.template', 'example.env', 'env'];
+    expect(not.map(isEnvFileName)).toEqual(not.map(() => false));
   });
 
   it('finds dotenv files in the project but not in dependency directories', async () => {
@@ -179,8 +197,12 @@ describe('env file discovery', () => {
     await writeFile(join(root, 'node_modules', 'pkg', '.env'), 'C=3');
     await writeFile(join(root, 'a', 'b', 'c', 'd', '.env'), 'D=4');
 
+    await writeFile(join(root, 'real-secrets'), 'E=5');
+    await symlink(join(root, 'real-secrets'), join(root, 'apps', '.env'));
+
     expect(await findEnvFiles(root)).toEqual([
       join(root, '.env'),
+      join(root, 'apps', '.env'), // a symlinked env file still counts
       join(root, 'apps', 'api', '.env.local'),
     ]);
   });

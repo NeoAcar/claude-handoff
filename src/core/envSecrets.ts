@@ -11,7 +11,7 @@
  * get redaction patterns, and the key names (not values) for reporting.
  */
 
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { literalPattern } from './redactor.js';
 import type { RedactionPattern } from './redactor.js';
@@ -33,11 +33,45 @@ const MIN_SECRET_LENGTH = 8;
 const MIN_UNNAMED_SECRET_LENGTH = 20;
 const MIN_UNNAMED_SECRET_ENTROPY = 3.5;
 
-const SECRET_KEY_REGEX =
-  /(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|PASS|PWD|CREDENTIAL|AUTH|PRIVATE|SIGNATURE|SALT|DSN|WEBHOOK|DATABASE_URL|CONNECTION_STRING)/i;
+/** A purely numeric value is only taken when it is at least this long. */
+const MIN_NUMERIC_SECRET_LENGTH = 12;
 
-/** `.env` variants that hold placeholders, not real values. */
-const TEMPLATE_SUFFIXES = ['.example', '.sample', '.template', '.dist', '.defaults'];
+/** Words that mark a variable as secret when they are a whole `_`-separated part of its name. */
+const SECRET_NAME_PARTS = new Set([
+  'KEY',
+  'APIKEY',
+  'SECRET',
+  'TOKEN',
+  'PASSWORD',
+  'PASSWD',
+  'PASS',
+  'PWD',
+  'CREDENTIAL',
+  'CREDS',
+  'AUTH',
+  'PRIVATE',
+  'SIGNATURE',
+  'SALT',
+  'DSN',
+  'WEBHOOK',
+]);
+const SECRET_NAME_PHRASES = /DATABASE_URL|CONNECTION_STRING|CONN_STR/i;
+
+/**
+ * Does the variable name say its value is a secret? Whole name parts
+ * only, so `AUTHOR` and `KEYBOARD_LAYOUT` don't count while `API_KEYS`
+ * and `GITHUB_TOKEN` do.
+ */
+export function isSecretName(key: string): boolean {
+  if (SECRET_NAME_PHRASES.test(key)) return true;
+  return key
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .some((part) => SECRET_NAME_PARTS.has(part) || SECRET_NAME_PARTS.has(part.replace(/S$/, '')));
+}
+
+/** Name parts that mark an env file as a template holding placeholders, not real values. */
+const TEMPLATE_PARTS = new Set(['example', 'sample', 'template', 'dist', 'defaults']);
 
 const SKIPPED_DIRS = new Set([
   'node_modules',
@@ -77,8 +111,9 @@ export function parseEnvFile(content: string): EnvEntry[] {
     let value = match[2];
 
     const quote = value[0];
-    if ((quote === '"' || quote === "'") && value.lastIndexOf(quote) > 0) {
-      value = value.slice(1, value.lastIndexOf(quote));
+    const quoted = quote === '"' || quote === "'" ? readQuoted(value, quote) : undefined;
+    if (quoted !== undefined) {
+      value = quoted;
     } else {
       const commentAt = value.search(/\s#/);
       if (commentAt >= 0) value = value.slice(0, commentAt);
@@ -88,6 +123,27 @@ export function parseEnvFile(content: string): EnvEntry[] {
     if (value.length > 0) entries.push({ key, value });
   }
   return entries;
+}
+
+/**
+ * Read a quoted value starting at `text[0]`, up to its closing quote.
+ * Double quotes honour backslash escapes, so the result is the value a
+ * program would see, not its spelling in the file. Returns undefined if
+ * the quote never closes.
+ */
+function readQuoted(text: string, quote: string): string | undefined {
+  let out = '';
+  for (let i = 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === quote) return out;
+    if (quote === '"' && ch === '\\' && i + 1 < text.length) {
+      const next = text[++i];
+      out += next === 'n' ? '\n' : next === 't' ? '\t' : next === 'r' ? '\r' : next;
+    } else {
+      out += ch;
+    }
+  }
+  return undefined;
 }
 
 // --- Selection ---
@@ -109,9 +165,9 @@ export function shannonEntropy(value: string): number {
  *
  * A value qualifies when it is at least 8 characters and either its key
  * name says "secret" (`*_TOKEN`, `*_PASSWORD`, `DATABASE_URL`, …) or the
- * value itself looks like generated key material (see `looksRandom`). Numbers, booleans and
- * filesystem paths never qualify — scrubbing `3000` or `/usr/local/bin`
- * out of a transcript would wreck it.
+ * value itself looks like generated key material (see `looksRandom`).
+ * Booleans, short numbers and filesystem paths never qualify — scrubbing
+ * `86400000` or `/usr/local/bin` out of a transcript would wreck it.
  *
  * A URL that embeds a password contributes the password as a secret of
  * its own, since that is the part that tends to resurface alone.
@@ -128,10 +184,12 @@ export function selectSecrets(
 
   for (const { key, value } of entries) {
     if (value.length < MIN_SECRET_LENGTH) continue;
-    if (/^[\d.,_-]+$/.test(value) || /^(?:true|false|null|undefined)$/i.test(value)) continue;
-    if (/^(?:[A-Za-z]:)?[\\/~.]/.test(value)) continue;
+    if (/^(?:true|false|null|undefined)$/i.test(value)) continue;
+    // Numbers: a 12-digit password is plausible, `86400000` is a setting.
+    if (/^[\d.,_-]+$/.test(value) && value.length < MIN_NUMERIC_SECRET_LENGTH) continue;
+    if (looksLikePath(value)) continue;
 
-    const named = SECRET_KEY_REGEX.test(key);
+    const named = isSecretName(key);
     const random = !options.namedKeysOnly && looksRandom(value);
     if (!named && !random) continue;
 
@@ -163,6 +221,18 @@ function looksRandom(value: string): boolean {
     !/[a-z]{6,}/.test(value) &&
     shannonEntropy(value) >= MIN_UNNAMED_SECRET_ENTROPY
   );
+}
+
+/**
+ * A filesystem path rather than key material: starts like one, and isn't
+ * the long mixed-case-and-digits soup of a base64 secret that merely
+ * begins with `/`.
+ */
+function looksLikePath(value: string): boolean {
+  if (!/^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/]|~[\\/])/.test(value)) return false;
+  const keyLike =
+    value.length >= 30 && /\d/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value);
+  return !keyLike;
 }
 
 function passwordFromUrl(value: string): string | undefined {
@@ -199,10 +269,18 @@ export function envRedactionPatterns(secrets: EnvSecret[]): RedactionPattern[] {
 
 // --- Discovery ---
 
-/** Is this basename a real dotenv file (`.env`, `.env.local`, …) rather than a template? */
+/**
+ * Is this basename a real env file (`.env`, `.env.local`, `.envrc`,
+ * `secrets.env`, …) rather than a template (`.env.example`)?
+ */
 export function isEnvFileName(name: string): boolean {
-  if (name !== '.env' && !name.startsWith('.env.')) return false;
-  return !TEMPLATE_SUFFIXES.some((suffix) => name.endsWith(suffix));
+  const isEnv =
+    name === '.env' || name === '.envrc' || name.startsWith('.env.') || name.endsWith('.env');
+  const isTemplate = name
+    .toLowerCase()
+    .split('.')
+    .some((part) => TEMPLATE_PARTS.has(part));
+  return isEnv && !isTemplate;
 }
 
 /**
@@ -220,7 +298,7 @@ export async function findEnvFiles(projectRoot: string): Promise<string[]> {
       return;
     }
     for (const entry of entries) {
-      if (entry.isFile() && isEnvFileName(entry.name)) {
+      if (isEnvFileName(entry.name) && (await isReadableFile(path.join(dir, entry.name)))) {
         found.push(path.join(dir, entry.name));
       } else if (entry.isDirectory() && depth < MAX_SCAN_DEPTH && !SKIPPED_DIRS.has(entry.name)) {
         await walk(path.join(dir, entry.name), depth + 1);
@@ -230,6 +308,15 @@ export async function findEnvFiles(projectRoot: string): Promise<string[]> {
 
   await walk(projectRoot, 0);
   return found.sort();
+}
+
+/** True for a regular file, following a symlink (a linked `.env` is still the project's). */
+async function isReadableFile(filePath: string): Promise<boolean> {
+  try {
+    return (await stat(filePath)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export interface CollectedEnvSecrets {
