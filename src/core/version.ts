@@ -14,7 +14,7 @@ export const TOOL_VERSION: string = (require('../../package.json') as { version:
  * round-trip was checked against. The session format is undocumented, so
  * anything newer is unverified rather than known-broken.
  */
-export const LAST_VERIFIED_CLAUDE_CODE = '2.1.288';
+export const LAST_VERIFIED_CLAUDE_CODE = '2.1.289';
 
 /**
  * Bundles written by a version older than this (or by one that didn't

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { redactText, deepRedact, parseCustomPatterns } from '../../src/core/redactor.js';
+import {
+  redactText,
+  deepRedact,
+  literalPattern,
+  parseCustomPatterns,
+} from '../../src/core/redactor.js';
 
 // --- Default patterns: positive cases ---
 
@@ -281,5 +286,19 @@ describe('provider key formats added in 0.3.0', () => {
     const code = 'const token = parseAuthorizationHeader(req); secret: process.env.SECRET';
     expect(redacted(code)).toBe(code);
     expect(redacted('token: abc123')).toBe('token: abc123');
+  });
+});
+
+describe('markers left by earlier patterns', () => {
+  it('are not re-redacted by a greedy default pattern', () => {
+    const env = literalPattern('env-value', 'maple-Orchid-63', '[REDACTED:env:DB_PASSWORD]', true);
+    const { text, hits } = redactText('DB_PASSWORD=maple-Orchid-63 and password: hunter2', [env]);
+    expect(text).toBe('DB_PASSWORD=[REDACTED:env:DB_PASSWORD] and password: [REDACTED:password]');
+    expect(hits.map((h) => h.pattern)).toEqual(['env-value', 'password']);
+  });
+
+  it('inserts replacement text literally', () => {
+    const odd = literalPattern('odd', 'needle', 'a$&b$1c', true);
+    expect(redactText('x needle y', [odd]).text).toBe('x a$&b$1c y');
   });
 });

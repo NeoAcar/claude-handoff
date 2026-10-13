@@ -107,6 +107,9 @@ export interface RedactionResult {
 
 // --- Core redaction ---
 
+/** A match that is nothing but a marker some earlier pattern wrote. */
+const EXISTING_MARKER = /^\[REDACTED:[^\]\s]*\]$/;
+
 /**
  * Scan text for secrets and return redacted text plus a list of hits.
  */
@@ -120,27 +123,37 @@ export function redactText(text: string, customPatterns: RedactionPattern[] = []
   const allPatterns = [...customPatterns, ...DEFAULT_PATTERNS];
 
   for (const pattern of allPatterns) {
-    // Reset regex state (global flag)
+    // Fresh regex per pass: the shared one carries lastIndex state.
     const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
+    const parts: string[] = [];
+    let cursor = 0;
     let match: RegExpExecArray | null;
 
-    // First pass: collect hits for the log
     while ((match = regex.exec(result)) !== null) {
-      const start = Math.max(0, match.index - 20);
-      const end = Math.min(result.length, match.index + match[0].length + 20);
-      const before = result.slice(start, match.index);
-      const after = result.slice(match.index + match[0].length, end);
+      if (match[0].length === 0) {
+        regex.lastIndex++;
+        continue;
+      }
+      // Greedy patterns (`password=\S+`) would otherwise re-redact a marker
+      // an earlier, more specific pattern left behind and discard its label.
+      if (EXISTING_MARKER.test(match[0])) continue;
+
+      const end = match.index + match[0].length;
       hits.push({
         pattern: pattern.name,
-        context: `${before}[***]${after}`,
+        context:
+          result.slice(Math.max(0, match.index - 20), match.index) +
+          '[***]' +
+          result.slice(end, Math.min(result.length, end + 20)),
       });
+      parts.push(result.slice(cursor, match.index), pattern.replacement);
+      cursor = end;
     }
 
-    // Second pass: replace
-    result = result.replace(
-      new RegExp(pattern.regex.source, pattern.regex.flags),
-      pattern.replacement,
-    );
+    if (cursor > 0) {
+      parts.push(result.slice(cursor));
+      result = parts.join('');
+    }
   }
 
   return { text: result, hits };
@@ -194,8 +207,7 @@ export function literalPattern(
   return {
     name,
     regex: new RegExp(literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi'),
-    // `$` is special in String.replace replacements.
-    replacement: replacement.replace(/\$/g, '$$$$'),
+    replacement,
   };
 }
 
