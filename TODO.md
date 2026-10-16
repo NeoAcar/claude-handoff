@@ -9,6 +9,28 @@ ranges that shipped them; git history has the details.
 
 ### High priority
 
+- [ ] **Warn when the conversation and the code disagree.** A session
+      can describe edits that never reached the receiver: Alice's
+      Claude changed `src/login.ts`, Alice shared the session without
+      committing it, and Neo's Claude resumes believing the change is
+      there. On export, record the commit, the branch (already in each
+      record's `gitBranch`) and the files the session edited that are
+      still uncommitted (the transcript's file-history snapshots list
+      edited files). On import, compare with the receiver's checkout
+      and warn, e.g. "exported at a1b2c3d with 2 uncommitted files;
+      you are at d4e5f6a". Read-only git calls only — the no-git rule
+      in CLAUDE.md is about never committing or staging. Idea prompted
+      by a comment in anthropics/claude-code#11455 about handoff notes
+      claiming work that was never committed.
+
+- [ ] **Say plainly what redaction cannot do.** The tool scrubs secrets
+      when a session is shared; it does not stop a secret from reaching
+      the model during the session (an `env` in a Bash command, say).
+      Add a README line pointing at the other half of the problem:
+      hook-based tools that mask Bash output before the model sees it
+      (one was mentioned in anthropics/claude-code#80153), and the
+      built-in fix requested there.
+
 - [ ] **Redactor false positives beyond `url-with-creds`.**
       Exporting from this repo still produces false positives from:
       (a) synthetic secrets inside `test/core/redactor.test.ts`
