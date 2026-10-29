@@ -339,6 +339,22 @@ These are streaming progress updates (tool execution output). They're roughly ha
 
 ---
 
+### Forked sessions (checked on Claude Code 2.1.289, October 2026)
+
+`claude --resume <id> --fork-session` writes a new transcript under a new
+session ID that **copies** the parent's records (same `uuid`s, `sessionId`
+rewritten to the fork's). No `parentUuid` in the fork points outside its
+own file, so a forked session exports and resumes on its own; the parent
+does not need to travel with it.
+
+### Tool calls the handoff summary relies on (2.1.289)
+
+`assistant` records carry `tool_use` blocks: `Edit` / `Write` /
+`MultiEdit` with an absolute `input.file_path`, `NotebookEdit` with
+`input.notebook_path`, `Bash` with `input.command`. Results come back in
+`user` records as `tool_result` blocks keyed by `tool_use_id`, with
+`is_error: true` on failure.
+
 ## Flags / Deviations from SPEC
 
 1. **`sessions-index.json` does not exist.** SPEC Sections 5.1, 5.2, and 8 reference it. The HANDOFF.md generator must parse metadata from JSONL files directly instead.

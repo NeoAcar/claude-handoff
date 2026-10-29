@@ -11,6 +11,8 @@ import path from 'node:path';
 import { extractAccountIdentity } from './sanitizeRecord.js';
 import type { AccountIdentity } from './sanitizeRecord.js';
 import { titleFromRecord, truncateTitle } from './title.js';
+import { ActivityCollector } from './activity.js';
+import type { SessionActivity } from './activity.js';
 
 // --- Types ---
 
@@ -41,6 +43,8 @@ export interface SessionMeta {
   claudeCodeVersion?: string;
   /** Account identifiers Claude Code recorded in this transcript. */
   identity: AccountIdentity;
+  /** What the session did, from its tool calls (see `activity.ts`). */
+  activity: SessionActivity;
 }
 
 type TitleFields = Pick<SessionMeta, 'customTitle' | 'aiTitle' | 'firstPrompt' | 'lastPrompt'>;
@@ -191,6 +195,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
   let firstPrompt: string | undefined;
   let lastPrompt: string | undefined;
   let claudeCodeVersion: string | undefined;
+  const activity = new ActivityCollector();
   const emails = new Set<string>();
   const orgUuids = new Set<string>();
   let firstTimestamp: string | undefined;
@@ -199,6 +204,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
 
   const stats = await streamRecords(filePath, (record) => {
     recordCount++;
+    activity.add(record);
 
     if (record.sessionId && !sessionId) {
       sessionId = record.sessionId;
@@ -253,6 +259,7 @@ export async function extractSessionMeta(filePath: string): Promise<SessionMeta>
     stats,
     claudeCodeVersion,
     identity: { emails: [...emails], orgUuids: [...orgUuids] },
+    activity: activity.result(),
   };
 }
 

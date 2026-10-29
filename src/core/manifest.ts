@@ -21,6 +21,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { HandoffContext } from './handoffContext.js';
 
 export type ArtifactKind =
   | 'transcript' // main session transcript (always present)
@@ -65,6 +66,8 @@ export interface ManifestEntry {
   artifacts: BundleArtifact[];
   /** claude-handoff version that wrote this bundle. Absent before 0.2.2. */
   exportedWith?: string;
+  /** Commit, edited files and uncommitted edits at export time. Absent before 0.3.1. */
+  context?: HandoffContext;
 
   // --- Iteration-support fields (added for 0.2.0).
   /**
@@ -76,9 +79,8 @@ export interface ManifestEntry {
    */
   sourceMtimeMs?: number;
   /**
-   * Record count of the source file at export time (not the count
-   * written to the bundle — those can differ when --strip-progress
-   * drops records). Used alongside `sourceMtimeMs` for fork detection:
+   * Record count of the source file at export time (bundles written by
+   * older versions with --strip-progress could hold fewer). Used alongside `sourceMtimeMs` for fork detection:
    * if a local session has FEWER records than the shared bundle, that
    * usually means teammate work is about to be overwritten.
    */

@@ -43,7 +43,6 @@ program
   .addOption(new Option('--no-redact').hideHelp())
   .addOption(new Option('--i-know-what-im-doing').default(false).hideHelp())
   .addOption(new Option('--no-env-scan').hideHelp())
-  .addOption(new Option('--strip-progress').default(false).hideHelp())
   .addOption(new Option('--keep-signatures').default(false).hideHelp())
   .addOption(new Option('--force').default(false).hideHelp())
   .addHelpText(
@@ -53,7 +52,6 @@ program
       'Less common options (details in the README):',
       '  --since <date>       only sessions started on or after an ISO date',
       '  --author <name>      name recorded in the bundle (default: git user.name)',
-      '  --strip-progress     drop streaming progress records to shrink the bundle',
       '  --keep-signatures    keep signed thinking blocks (receiver must share your API key)',
       '  --force              export even if the shared bundle looks newer than your copy',
       '  --no-env-scan        do not scrub values found in .env files and the environment',
@@ -72,7 +70,6 @@ program
         since: opts.since,
         all: opts.all,
         requireSelection: true,
-        stripProgress: opts.stripProgress,
         keepSignatures: opts.keepSignatures,
         includeMemory: opts.memory,
         force: opts.force,

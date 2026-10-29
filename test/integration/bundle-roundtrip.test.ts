@@ -94,7 +94,6 @@ describe('bundle round-trip', () => {
       dryRun: false,
       noRedact: true,
       iKnowWhatImDoing: true,
-      stripProgress: false,
     });
 
     // Sanity-check the bundle that was written.
@@ -187,7 +186,6 @@ describe('bundle round-trip', () => {
       dryRun: false,
       noRedact: true,
       iKnowWhatImDoing: true,
-      stripProgress: false,
     });
 
     const manifest = await readManifest(join(alice.project, '.claude-shared'));

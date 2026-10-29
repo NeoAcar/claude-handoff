@@ -98,7 +98,6 @@ describe('memory round-trip', () => {
       dryRun: false,
       noRedact: true,
       iKnowWhatImDoing: true,
-      stripProgress: false,
       includeMemory: true,
     });
 
@@ -187,7 +186,6 @@ describe('memory round-trip', () => {
       dryRun: false,
       noRedact: true,
       iKnowWhatImDoing: true,
-      stripProgress: false,
       includeMemory: false,
     });
 

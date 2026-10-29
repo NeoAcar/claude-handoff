@@ -41,6 +41,8 @@ import type { SessionMeta, SessionRecord } from '../core/session.js';
 import { identityRedactionPatterns, stripThinkingSignatures } from '../core/sanitizeRecord.js';
 import { deepRedact, parseCustomPatterns, redactText } from '../core/redactor.js';
 import { collectEnvSecrets, envRedactionPatterns } from '../core/envSecrets.js';
+import { readGitState } from '../core/git.js';
+import { buildHandoffContext, renderHandoffMarkdown } from '../core/handoffContext.js';
 import { ensureLocalDirIgnored, ensureSharedReadme } from './init.js';
 import { humanAge } from './status.js';
 import type { RedactionHit, RedactionPattern } from '../core/redactor.js';
@@ -56,7 +58,6 @@ export interface ExportOptions {
   session?: string;
   last?: number;
   since?: string;
-  stripProgress?: boolean;
   /**
    * Strip `thinking` content blocks that carry a `signature` field.
    * Default true — an unstripped signature is tied to the origin API
@@ -305,6 +306,10 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
 
   if (envNote) console.log(envNote);
 
+  // The sender's repository state, read once: what the receiver will
+  // need to have for the conversation to match their code.
+  const gitState = await readGitState(projectRoot);
+
   // Read or create manifest. readManifest auto-migrates v1 → v2 on load
   // so older .claude-shared/ folders keep working.
   let manifest = await readManifest(sharedDir);
@@ -393,14 +398,9 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     const sessionPatterns = [...envPatterns, ...customPatterns, ...identityPatterns];
 
     // --- Main transcript ---
-    let strippedProgress = 0;
     const mainBundlePath = 'main.jsonl';
     const mainDest = path.join(bundleDir, mainBundlePath);
     const mainTransform = await transformSession(sessionFile, mainDest, (record) => {
-      if (options.stripProgress && record.type === 'progress') {
-        strippedProgress++;
-        return null;
-      }
       const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
       let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
       if (!options.noRedact) {
@@ -456,10 +456,6 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       } else if (bundlePath.endsWith('.jsonl')) {
         const hitsBefore = sessionHits.length;
         const sideTransform = await transformSession(src.sourcePath, dest, (record) => {
-          if (options.stripProgress && record.type === 'progress') {
-            strippedProgress++;
-            return null;
-          }
           const sanitized = options.keepSignatures ? record : stripThinkingSignatures(record);
           let rewritten = deepRewrite(sanitized, rewriteString) as SessionRecord;
           if (!options.noRedact) {
@@ -533,10 +529,24 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       title,
       firstTimestamp: meta.firstTimestamp,
       lastTimestamp: meta.lastTimestamp,
-      strippedProgress,
     };
     const metadataPath = path.join(bundleDir, 'metadata.json');
     await writeFile(metadataPath, JSON.stringify(metadataPayload, null, 2) + '\n', 'utf-8');
+
+    // --- What the session did, and what the receiver may be missing ---
+    const clean = (text: string) => {
+      const rewritten = rewriteString(text);
+      if (options.noRedact) return rewritten;
+      const { text: redacted, hits } = redactText(rewritten, sessionPatterns);
+      sessionHits.push(...hits);
+      return redacted;
+    };
+    const context = buildHandoffContext(meta.activity, gitState, clean);
+    await writeFile(
+      path.join(bundleDir, 'HANDOFF.md'),
+      renderHandoffMarkdown({ title, author, exportedAt: metadataPayload.exportedAt, context }),
+      'utf-8',
+    );
 
     // --- Manifest entry ---
     const entry: ManifestEntry = {
@@ -554,6 +564,7 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
       sourceRecordCount,
       artifacts,
       exportedWith: TOOL_VERSION,
+      context,
       ...(previousExportsForEntry ? { previousExports: previousExportsForEntry } : {}),
     };
 
@@ -568,13 +579,17 @@ export async function exportCommand(projectRoot: string, options: ExportOptions)
     if (mainTransform.stats.recoveredLines > 0 || mainTransform.stats.skippedLines > 0) {
       suffix = ` [recovered ${mainTransform.stats.recoveredLines}, skipped ${mainTransform.stats.skippedLines}]`;
     }
-    if (strippedProgress > 0) {
-      suffix += ` [stripped ${strippedProgress} progress]`;
-    }
     const sidecarNote = sidecarCount > 0 ? ` + ${sidecarCount} sidecar(s)` : '';
     console.log(
       `  Exported: ${sessionId}/ — ${title} (${mainTransform.count} records${sidecarNote})${suffix}`,
     );
+    if (context.uncommittedEdits.length > 0) {
+      console.log(
+        `    Note: ${context.uncommittedEdits.length} file(s) this session edited are not committed ` +
+          `(${context.uncommittedEdits.slice(0, 3).join(', ')}${context.uncommittedEdits.length > 3 ? ', …' : ''}). ` +
+          'Commit and push them too, or the receiver resumes without those changes.',
+      );
+    }
   }
 
   // --- Project memory (opt-in via --memory) ---

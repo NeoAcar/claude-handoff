@@ -26,6 +26,8 @@ import os from 'node:os';
 import { portableToLocal, deepRewrite } from '../core/paths.js';
 import { getMemoryDir, getOrComputeStoreDir } from '../core/store.js';
 import { isSafeRelativePath } from '../core/archive.js';
+import { hasCommit } from '../core/git.js';
+import { receiverWarnings } from '../core/handoffContext.js';
 import {
   listSessionFiles,
   extractSessionMeta,
@@ -256,6 +258,15 @@ export async function importCommand(projectRoot: string, options: ImportOptions)
     console.log(
       `  Imported: ${sessionId}.jsonl — ${title} (${importedArtifacts} artifact(s)${sidecarNote})`,
     );
+    const transcript = entry.artifacts.find((a) => a.kind === 'transcript');
+    const warnings = receiverWarnings({
+      context: entry.context,
+      receiverHasCommit: entry.context?.commit
+        ? await hasCommit(projectRoot, entry.context.commit)
+        : undefined,
+      transcriptBytes: transcript?.bytes,
+    });
+    for (const warning of warnings) console.log(`    ! ${warning}`);
     importedCount++;
     importedIds.push(sessionId);
   }

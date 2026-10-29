@@ -33,7 +33,7 @@ If the command is missing, tell the user to install it with \`npm install -g @ne
 3. Export it, naming the session by a few words of its title (or \`-n 1\` for the most recent):
    - repo: \`claude-handoff export "<title words>"\`
    - file: \`claude-handoff export "<title words>" -o\` — writes \`<session-title>.handoff\` in the project directory and prints its path
-4. Report what the command printed: which sessions, how many redactions and of which kinds.
+4. Report what the command printed: which sessions, how many redactions and of which kinds. If it notes that files the session edited are not committed, tell the user before they share: the receiver won't have those changes unless they are committed and pushed too.
 5. For the repo route, tell the user to review \`git diff .claude-shared/\` and commit it themselves.
 
 ## Receiving
@@ -41,7 +41,7 @@ If the command is missing, tell the user to install it with \`npm install -g @ne
 - From the repo, after \`git pull\`: \`claude-handoff import\`
 - From a file: \`claude-handoff import <file>\`
 
-Then give the user the \`claude --resume <id>\` line the command printed.
+Then give the user the \`claude --resume <id>\` line the command printed, and pass on any warnings it printed (a missing commit, edits the sender never committed).
 
 ## Rules
 
