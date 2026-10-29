@@ -7,54 +7,6 @@ ranges that shipped them; git history has the details.
 
 ## Open
 
-### High priority
-
-- [ ] **Warn when the conversation and the code disagree.** A session
-      can describe edits that never reached the receiver: Alice's
-      Claude changed `src/login.ts`, Alice shared the session without
-      committing it, and Neo's Claude resumes believing the change is
-      there. On export, record the commit, the branch (already in each
-      record's `gitBranch`) and the files the session edited that are
-      still uncommitted (the transcript's file-history snapshots list
-      edited files). On import, compare with the receiver's checkout
-      and warn, e.g. "exported at a1b2c3d with 2 uncommitted files;
-      you are at d4e5f6a". Read-only git calls only — the no-git rule
-      in CLAUDE.md is about never committing or staging. Idea prompted
-      by a comment in anthropics/claude-code#11455 about handoff notes
-      claiming work that was never committed.
-
-- [ ] **Say plainly what redaction cannot do.** The tool scrubs secrets
-      when a session is shared; it does not stop a secret from reaching
-      the model during the session (an `env` in a Bash command, say).
-      Add a README line pointing at the other half of the problem:
-      hook-based tools that mask Bash output before the model sees it
-      (one was mentioned in anthropics/claude-code#80153), and the
-      built-in fix requested there.
-
-- [ ] **Redactor false positives beyond `url-with-creds`.**
-      Exporting from this repo still produces false positives from:
-      (a) synthetic secrets inside `test/core/redactor.test.ts`
-      fixtures, (b) markdown docs that use `password=xxx`-style
-      examples, (c) TypeScript literals like `type: 'aws-key'`. The
-      URL pattern was tightened in `05cf64a`, but the broader fix is
-      a context heuristic (skip inside test fixtures, markdown code
-      blocks tagged `example`, type-literal strings). Alternatively
-      / additionally: extend `.claude-handoff-ignore` to support
-      path globs so the user can say "skip scanning test/fixtures".
-
-- [ ] **`inspect` command.** Safe read-only viewer for a shared
-      session. Pattern is already defined in
-      `.claude/commands/inspect-session.md`: print user / assistant
-      message counts, tool-use summary, redaction summary, first /
-      last timestamps — **never** print raw content. This is what
-      reviewers will want before pulling a PR that touches
-      `.claude-shared/`.
-
-- [ ] **More spellings of known values.** `.env` values are matched
-      as written, JSON-escaped and URL-encoded. Base64 (as in a Basic
-      auth header), shell-quoted and HTML-escaped forms are not, and
-      `.env` files above the project root (monorepos) are not read.
-
 - [ ] **Which route should be the default?** A bare `export` writes
       `.claude-shared/` (committed, so it stays in git history for
       good); `-o` writes a `.handoff` file (leaves no trace, but has
@@ -63,77 +15,13 @@ ranges that shipped them; git history has the details.
       Decide after real use shows which one people reach for; the
       alternative is `export` → file, `export --repo` → `.claude-shared/`.
 
-### Medium priority
+### Known limits, not planned
 
-- [ ] **Bundle size on Claude Code 2.1.x.** `prompt_snapshot`,
-      `deferred_tools_delta`, `deferred_tools_record` and
-      `mcp_instructions_delta` attachments dominate small sessions
-      (a 2-turn session measured 282 KB, ~200 KB of it these
-      records). They sit in the `parentUuid` chain, so dropping them
-      needs a resume test first, like `--strip-progress`.
-
-- [ ] **`.claude-handoff-memory-ignore` allow-list.** Memory export
-      is currently all-or-nothing (minus `MEMORY.md`). Teams that
-      want to share only select memory files need a filter. Format
-      mirrors `.claude-handoff-ignore`: one glob per line,
-      `#` comments.
-
-- [ ] **Metadata-scrub for subagent meta sidecars.** The Codex pass
-      (`task-mo8qd79h-aa0vti`) enumerated fields in `writeAgentMetadata`
-      / `writeRemoteAgentMetadata` that are freeform text or
-      machine-specific: `worktreePath`, `description`, `title`,
-      `command`, `spawnedAt`, `sessionId`, `taskId`, `toolUseId`,
-      `remoteTaskMetadata.{owner,repo,prNumber}`. Our pipeline
-      already path-rewrites and redacts string values, but we don't
-      have an explicit scrub for wallclock timestamps or machine-
-      specific IDs. Decide whether to add one.
-
-- [ ] **message.id remapping.** Anthropic `msg_…` IDs currently
-      pass through unchanged. They're not path-bearing so nothing
-      breaks, but they're machine-tied. Decide: leave alone (current
-      behavior) or remap to a deterministic-per-session UUID so the
-      export is fully machine-neutral.
-
-- [ ] **Verify `/resume` still works with `--strip-progress`.**
-      We exclude streaming progress records to shrink big sessions,
-      but haven't confirmed end-to-end that Claude Code's resume
-      picker and replay behave correctly on a stripped file. Manual
-      round-trip on a real session.
-
-- [ ] **Session forking design.** Alice exports → Neo imports →
-      Neo continues → Neo exports. Today we skip or overwrite on
-      collision. Design a proper fork/merge strategy: keep both?
-      Namespace by author? First-write-wins with a warning?
-
-- [ ] **Worktree-aware enumeration (Phase 3E).** `store.ts:enumerateWorktreeRoots(projectRoot)`
-      via `git worktree list --porcelain`, then
-      `listProjectSessionFiles(projectRoot, { includeWorktrees: true })`
-      unions them. Gated behind `--include-worktrees` on
-      `export` / `status`.
-
-### Low priority
-
-- [ ] **Desktop app registration.** claude-code-export-import also
-      writes the Desktop app's `local_*.json` record so an imported
-      session shows in its sidebar. Not inspected here yet — needs a
-      Phase-0-style look at a real file before any code.
-
-- [ ] **HANDOFF.md generator.** Auto-generate a human-readable
-      summary with `<!-- MANUAL -->` sections preserved across
-      regenerations. Deferred because current session titles
-      already make the picker useful enough.
-
-- [ ] **Redaction via `detect-secrets` or `gitleaks`.** Optional
-      shell-out for broader pattern coverage. Adds a dependency, so
-      gate behind a flag.
-
-### Out of scope for now
-
-- [ ] Git hooks (auto-export on commit, auto-import on pull).
-- [ ] Windows support — needs a test machine.
-- [ ] Long-path hash tolerance — the reference hashes paths that
-      exceed some threshold instead of sluggifying. We don't know
-      the threshold or hash function yet. Revisit if a user hits it.
+- Windows is untested — needs a machine to test on.
+- Very long project paths: Claude Code may hash them instead of
+  turning them into a folder name. Store lookup falls back to reading
+  `cwd` from session files, which should cope; revisit if someone
+  reports a miss.
 
 ### What we deliberately skip from the reference codebase
 
@@ -146,6 +34,12 @@ ranges that shipped them; git history has the details.
 ---
 
 ## Completed
+
+### 0.3.1 — Handoff context
+
+`HANDOFF.md` per bundle (edited files, commands, last request, commit),
+import warnings for a missing commit, uncommitted edits and very large
+transcripts. Forked sessions checked: self-contained.
 
 ### 0.3.0 — Known-secret scrubbing, archives, doctor, skill
 
@@ -241,4 +135,4 @@ Informed by Codex analysis of the reference repo at `/tmp/codecli`
   (LLM-maintained; Claude Code rebuilds it). Worktrees share one
   memory store via `findCanonicalGitRoot`. Commit `07d2753`.
 
-**Current test count:** 240 across 18 suites.
+**Current test count:** 257 across 22 suites.

@@ -4,6 +4,40 @@ All notable changes to `@neoacar/claude-handoff`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1]
+
+### Added
+
+- **What the receiver may be missing.** Each exported session records
+  the commit and branch it was exported from and which files it edited,
+  and flags the edits that were still uncommitted. `export` points
+  those out ("commit and push them too"); `import` warns when the
+  receiver's checkout lacks the commit, or when the session edited
+  files the sender never committed. Read-only git queries only.
+- **`HANDOFF.md` in every bundle.** A short, readable account of the
+  session — edited files, shell commands (and how many failed), the
+  last request — taken from the transcript itself rather than from
+  anything the model wrote. Useful to the receiver and to anyone
+  reviewing `.claude-shared/` in a pull request. Redacted like the
+  rest of the bundle.
+- `import` notes when a transcript is large (over 1.5 MB), since
+  resuming it re-reads the whole conversation.
+
+### Removed
+
+- `--strip-progress`. It dropped `progress` records, which current
+  Claude Code no longer writes, so it had nothing left to do.
+
+### Docs
+
+- The README says plainly that redaction cleans what is shared, and
+  does not stop a secret from reaching the model during a session.
+
+### Checked
+
+- Forked sessions (`--fork-session`) copy their parent's records into
+  their own file, so they export and resume without the parent.
+
 ## [0.3.0]
 
 Verified end-to-end against Claude Code 2.1.289.

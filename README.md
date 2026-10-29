@@ -74,6 +74,14 @@ who added what. Concurrent editing (both sides resuming at once
 and both appending) is **not** yet supported — use the tool for
 sequential handoff.
 
+**What the receiver is told.** A shared session only makes sense next
+to the code it talks about. Export records the commit it was made from
+and which files the session edited; if some of those edits were never
+committed, it says so before you share. On import, Neo is warned when
+his checkout lacks that commit or those edits. Each bundle also carries
+a `HANDOFF.md` — edited files, commands run, the last request — written
+by the tool from the transcript, not by the model.
+
 ## What ships across machines
 
 Every session is exported as a bundle directory:
@@ -82,6 +90,7 @@ Every session is exported as a bundle directory:
 .claude-shared/sessions/<sessionId>/
   main.jsonl              # the transcript (streamed, path-rewritten, redacted)
   metadata.json           # author, timestamps, title
+  HANDOFF.md              # what the session did, and what may be uncommitted
   subagents/*.jsonl       # Explore / Plan / general-purpose agent transcripts
   subagents/*.meta.json   # subagent metadata (agent type, description)
   session-memory/*.md     # session-scoped memory, when present
@@ -144,7 +153,6 @@ changes and takes the bundle. Pass it only when you mean to.
 ```
 --since <date>       only sessions started on or after an ISO date
 --author <name>      name recorded in the bundle (default: git user.name)
---strip-progress     drop streaming progress records to shrink the bundle
 --keep-signatures    keep signed thinking blocks (default: strip them, to
                      avoid API 400s after resuming under another API key)
 --force              export even if the shared bundle looks newer than
@@ -234,6 +242,15 @@ the file without installing it.
   memory only and are never written anywhere. It writes to
   `.claude-shared/`, `.claude-handoff/` (local log), the receiver's
   `~/.claude/`, and an archive file only where you name one.
+- **It cleans what you share, not what the model saw.** Redaction runs
+  when a session is exported. It does not stop a secret from reaching
+  Claude during the session — a `cat .env` or a stray `env` in a shell
+  command puts the value in front of the model and into the local
+  transcript, and anything exposed that way may still need rotating.
+  Masking tool output before the model sees it is a separate job, for
+  Claude Code itself (see
+  [anthropics/claude-code#80153](https://github.com/anthropics/claude-code/issues/80153))
+  or a hook-based tool.
 - **Redaction is a safety rail, not a guarantee.** Patterns can't catch
   every secret shape, and the `.env` scan only knows the values on the
   exporting machine. Use `.claude-handoff-ignore` for project-specific
@@ -262,7 +279,7 @@ git clone https://github.com/NeoAcar/claude-handoff
 cd claude-handoff
 npm install
 npm run build
-npm test               # vitest, ~240 tests
+npm test               # vitest, ~255 tests
 npm run lint           # prettier --check + tsc --noEmit
 npm link               # optional: make `claude-handoff` available globally
 ```
